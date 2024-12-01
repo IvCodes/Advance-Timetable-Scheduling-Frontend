@@ -30,7 +30,7 @@ graph TD
 
 ## 👥 Team Structure
 
-### Member Responsibilities
+- **Authentication & RBAC**: [Weerasinghe K.D.E.I - IT21259852](https://github.com/EasaraWeerasinghe)
 
 
 ## 🛠 Technical Stack
