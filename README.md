@@ -31,22 +31,7 @@ graph TD
 ## 👥 Team Structure
 
 ### Member Responsibilities
-```mermaid
-graph TD
-    subgraph "Team Division"
-        M1[Member 1] --> A1[Authentication]
-        M1 --> A2[User Management]
-        
-        M2[Member 2] --> B1[Admin Dashboard]
-        M2 --> B2[Data Management]
-        
-        M3[Member 3] --> C1[Module System]
-        M3 --> C2[Space Management]
-        
-        M4[Member 4] --> D1[Timetable System]
-        M4 --> D2[Constraints]
-    end
-```
+
 
 ## 🛠 Technical Stack
 
@@ -63,20 +48,6 @@ graph TD
 - **Code Quality:** ESLint + Prettier
 - **Testing:** Jest + RTL
 - **Version Control:** Git
-
-## 📁 Project Structure
-```
-src/
-├── features/           # Feature modules
-│   ├── authentication/ # Auth components
-│   ├── admin/         # Admin dashboard
-│   ├── faculty/       # Faculty management
-│   └── students/      # Student features
-├── components/        # Shared components
-├── config/           # Configuration
-├── redux/            # Store setup
-└── utils/            # Utilities
-```
 
 ## 🔄 State Management Flow
 ```mermaid
