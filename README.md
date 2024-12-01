@@ -1,7 +1,23 @@
 # Advanced Timetable Scheduling System
 
 ## 📚 Project Overview
-An intelligent university timetable scheduling system built with modern web technologies, featuring advanced algorithms and real-time scheduling capabilities.
+The Advanced Timetable Scheduling System is a cutting-edge solution designed to revolutionize university course scheduling through the power of artificial intelligence and modern web technologies. This system tackles the complex challenge of creating optimal academic timetables while considering multiple constraints, resource availability, and stakeholder preferences.
+
+### Key Features
+- **Intelligent Scheduling**: Implements advanced algorithms (Genetic Algorithm, Particle Swarm Optimization,Reinforcement Learning) for optimal timetable generation
+- **Real-time Conflict Resolution**: Automatically detects and resolves scheduling conflicts
+- **Resource Optimization**: Efficiently manages classroom spaces, faculty availability, and other resources
+- **Role-based Access Control**: Secure system access with different privileges for administrators, faculty, and students
+- **Interactive Dashboard**: Modern, user-friendly interface for schedule management and visualization
+
+
+### Core Objectives
+- Minimize scheduling conflicts and resource overlaps
+- Optimize resource utilization across the university
+- Reduce manual scheduling effort and human error
+- Provide flexible, data-driven scheduling solutions
+- Enable real-time schedule modifications and updates
+- Ensure scalability for growing institutional needs
 
 ## 🏗 System Architecture
 
@@ -113,4 +129,3 @@ npm run build
 
 ## 📝 License
 MIT License
-
