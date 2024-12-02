@@ -46,7 +46,7 @@ graph TD
 
 ## 👥 Team Structure
 
-- **Authentication & RBAC**: [Weerasinghe K.D.E.I - IT21259852](https://github.com/EasaraWeerasinghe)
+- **Authentication & RBAC**: [Weerasinghe K.D.E.I - IT21259852](https://github.com/IvCodes)
 
 
 ## 🛠 Technical Stack
