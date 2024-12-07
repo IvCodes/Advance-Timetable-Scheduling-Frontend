@@ -1,7 +1,19 @@
 # Advanced Timetable Scheduling System
 
+
+
 ## 📚 Project Overview
 The Advanced Timetable Scheduling System is a cutting-edge solution designed to revolutionize university course scheduling through the power of artificial intelligence and modern web technologies. This system tackles the complex challenge of creating optimal academic timetables while considering multiple constraints, resource availability, and stakeholder preferences.
+
+## 👥 Team  Members
+
+### Group Leader: IT21259852 - Weerasinghe K.D.E.I - it21259852@my.sliit.lk
+
+### Member 1: IT21172182 - Wijayawardhana G.L.C.N.D. - it21172182@my.sliit.lk  
+
+### Member 2: IT21208980 - De Silva K H P N - it21208980@my.sliit.lk    
+
+### Member 3: IT21266164 - Udayantha D.M.S - it21266164@my.sliit.lk  
 
 ### Key Features
 - **Intelligent Scheduling**: Implements advanced algorithms (Genetic Algorithm, Particle Swarm Optimization,Reinforcement Learning) for optimal timetable generation
