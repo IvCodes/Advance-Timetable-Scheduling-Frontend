@@ -1,68 +1,181 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 :root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+  --color-black: #101b23;
+  --color-white: #fff;
+  --color-gold: #243546;
+  --color-gold-dark: #1b2632;
+  --color-gold-darker: #1d80e9;
+  --color-gold-darkest: #593616;
+  --color-gold-darkest-2: #101b23;
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  font-family: "Poppins", sans-serif;
 
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--color-gold-darkest-2);
+  color: var(--color-white);
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
-}
-
-body {
+html,
+body,
+#root {
+  height: 100%;
   margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
+}
+/* 
+.background-black-gold-spots-1-hex {
+  color: #f2cd5e;
+}
+.background-black-gold-spots-2-hex {
+  color: #d9a648;
+}
+.background-black-gold-spots-3-hex {
+  color: #a6702e;
+}
+.background-black-gold-spots-4-hex {
+  color: #593616;
+}
+.background-black-gold-spots-5-hex {
+  color: #101b23;
 }
 
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
+.background-black-gold-spots-1-rgba {
+  color: rgba(242, 205, 94, 1);
+}
+.background-black-gold-spots-2-rgba {
+  color: rgba(217, 166, 72, 1);
+}
+.background-black-gold-spots-3-rgba {
+  color: rgba(166, 112, 46, 1);
+}
+.background-black-gold-spots-4-rgba {
+  color: rgba(89, 54, 22, 1);
+}
+.background-black-gold-spots-5-rgba {
+  color: rgba(13, 13, 13, 1);
 }
 
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
+.background-black-gold-spots-1-hsla {
+  color: hsla(45, 85, 65, 1);
+}
+.background-black-gold-spots-2-hsla {
+  color: hsla(38, 65, 56, 1);
+}
+.background-black-gold-spots-3-hsla {
+  color: hsla(33, 56, 41, 1);
+}
+.background-black-gold-spots-4-hsla {
+  color: hsla(28, 60, 21, 1);
+}
+.background-black-gold-spots-5-hsla {
+  color: hsla(0, 0, 5, 1);
+} */
+
+.poppins-thin {
+  font-family: "Poppins", sans-serif;
+  font-weight: 100;
+  font-style: normal;
+}
+
+.poppins-extralight {
+  font-family: "Poppins", sans-serif;
+  font-weight: 200;
+  font-style: normal;
+}
+
+.poppins-light {
+  font-family: "Poppins", sans-serif;
+  font-weight: 300;
+  font-style: normal;
+}
+
+.poppins-regular {
+  font-family: "Poppins", sans-serif;
+  font-weight: 400;
+  font-style: normal;
+}
+
+.poppins-medium {
+  font-family: "Poppins", sans-serif;
   font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+  font-style: normal;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
+.poppins-semibold {
+  font-family: "Poppins", sans-serif;
+  font-weight: 600;
+  font-style: normal;
+}
+
+.poppins-bold {
+  font-family: "Poppins", sans-serif;
+  font-weight: 700;
+  font-style: normal;
+}
+
+.poppins-extrabold {
+  font-family: "Poppins", sans-serif;
+  font-weight: 800;
+  font-style: normal;
+}
+
+.poppins-black {
+  font-family: "Poppins", sans-serif;
+  font-weight: 900;
+  font-style: normal;
+}
+
+.poppins-thin-italic {
+  font-family: "Poppins", sans-serif;
+  font-weight: 100;
+  font-style: italic;
+}
+
+.poppins-extralight-italic {
+  font-family: "Poppins", sans-serif;
+  font-weight: 200;
+  font-style: italic;
+}
+
+.poppins-light-italic {
+  font-family: "Poppins", sans-serif;
+  font-weight: 300;
+  font-style: italic;
+}
+
+.poppins-regular-italic {
+  font-family: "Poppins", sans-serif;
+  font-weight: 400;
+  font-style: italic;
+}
+
+.poppins-medium-italic {
+  font-family: "Poppins", sans-serif;
+  font-weight: 500;
+  font-style: italic;
+}
+
+.poppins-semibold-italic {
+  font-family: "Poppins", sans-serif;
+  font-weight: 600;
+  font-style: italic;
+}
+
+.poppins-bold-italic {
+  font-family: "Poppins", sans-serif;
+  font-weight: 700;
+  font-style: italic;
+}
+
+.poppins-extrabold-italic {
+  font-family: "Poppins", sans-serif;
+  font-weight: 800;
+  font-style: italic;
+}
+
+.poppins-black-italic {
+  font-family: "Poppins", sans-serif;
+  font-weight: 900;
+  font-style: italic;
 }
