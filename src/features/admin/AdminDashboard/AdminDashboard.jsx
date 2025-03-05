@@ -2,10 +2,7 @@ import React from "react";
 import Sidebar from "../../../components/sidebar/Sidebar";
 import { Outlet } from "react-router-dom";
 
-const sidebarLinks = [
-  { id: 1, href: "/admin/dashboard", text: "Home" },
-  { id: 2, href: "/admin/link", text: "link2" },
-];
+const sidebarLinks = [{ id: 1, href: "/admin/dashboard", text: "Home" }];
 
 function AdminDashboard() {
   return (
