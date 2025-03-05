@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
-import { Table, ConfigProvider, Tabs, Popover, Spin } from "antd";
+import { Table, ConfigProvider, Tabs, Popover, Spin, Button } from "antd";
 import {
   getDays,
   getPeriods,
@@ -8,17 +8,23 @@ import {
   getSpaces,
   getTeachers,
 } from "../DataManagement/data.api";
-import { getTimetable } from "./timetable.api";
+import {
+  getTimetable,
+  llmResponse,
+  getSelectedAlgorithm,
+  selectAlgorithm,
+} from "./timetable.api";
 
 const ViewTimetable = () => {
   const { days, periods, subjects, teachers, spaces } = useSelector(
     (state) => state.data
   );
-  const { timetable, evaluation, loading } = useSelector(
+  const { timetable, evaluation, loading, selectedAlgorithm } = useSelector(
     (state) => state.timetable
   );
   const dispatch = useDispatch();
   const algorithms = ["GA", "CO", "RL"];
+  const [nlResponse, setNlResponse] = useState("");
 
   useEffect(() => {
     dispatch(getDays());
@@ -27,7 +33,26 @@ const ViewTimetable = () => {
     dispatch(getSubjects());
     dispatch(getSpaces());
     dispatch(getTeachers());
+    dispatch(getSelectedAlgorithm());
   }, [dispatch]);
+
+  useEffect(() => {
+    const fetchllmresponse = async () => {
+      console.log(evaluation);
+      var result = null;
+      if (evaluation) {
+        result = await llmResponse(evaluation);
+        setNlResponse(result);
+      }
+    };
+    fetchllmresponse();
+  }, [evaluation]);
+
+  // useEffect(() => {
+  //   if (llmResponse) {
+  //     setNlResponse(llmResponse);
+  //   }
+  // }, [llmResponse]);
 
   const generateColumns = (days) => [
     {
@@ -41,7 +66,6 @@ const ViewTimetable = () => {
       dataIndex: day.name,
       key: day.name,
       render: (value) => {
-        console.log(value);
         if (value) {
           const { title, subject, room, teacher, duration } = value;
           const s = subjects?.find((s) => s.code === subject);
@@ -74,7 +98,7 @@ const ViewTimetable = () => {
     })),
   ];
 
-  const generateDataSource = (semesterTimetable, days, periods, algorithm) => {
+  const generateDataSource = (semesterTimetable, days, periods) => {
     return periods.map((period, periodIndex) => ({
       key: periodIndex,
       period: period.long_name,
@@ -82,8 +106,7 @@ const ViewTimetable = () => {
         const activity = semesterTimetable.find(
           (entry) =>
             entry.day.name === day.name &&
-            entry.period.some((p) => p.name === period.name) &&
-            entry?.algorithm === algorithm
+            entry.period.some((p) => p.name === period.name)
         );
         acc[day.name] = activity
           ? {
@@ -99,6 +122,15 @@ const ViewTimetable = () => {
     }));
   };
 
+  const getSemName = (semester) => {
+    const year = parseInt(semester.substring(3, 4));
+    const sem = parseInt(semester.substring(4, 6));
+    return {
+      year,
+      sem,
+    };
+  };
+
   return (
     <div className="bg-white p-6 rounded-xl shadow-md max-w-6xl mx-auto">
       {loading && (
@@ -109,11 +141,33 @@ const ViewTimetable = () => {
 
       {!loading &&
         algorithms.map((algorithm) => {
+          console.log(selectedAlgorithm?.selected_algorithm);
           return (
-            <div className="mb-10">
-              <h2 className="text-2xl font-semibold mb-6 text-center">
-                Timetables ({algorithm})
-              </h2>
+            <div className="mb-20">
+              <div className="flex justify-between">
+                <h2 className="text-2xl font-semibold mb-6 text-center">
+                  Timetable (
+                  {algorithm == "GA"
+                    ? "Genetic algorithms"
+                    : algorithm == "CO"
+                    ? "Ant Colony Optimization"
+                    : "Reinforcement Learning"}
+                  )
+                </h2>
+                {selectedAlgorithm?.selected_algorithm === algorithm ? (
+                  <div className="text-green-500">Selected</div>
+                ) : (
+                  <Button
+                    type="default"
+                    onClick={() => {
+                      dispatch(selectAlgorithm(algorithm));
+                      dispatch(getSelectedAlgorithm());
+                    }}
+                  >
+                    Select
+                  </Button>
+                )}
+              </div>
               <ConfigProvider
                 theme={{
                   components: {
@@ -124,7 +178,7 @@ const ViewTimetable = () => {
                 }}
               >
                 <Tabs type="card">
-                  {timetable.map((semesterTimetable) => {
+                  {timetable?.map((semesterTimetable) => {
                     const semester = semesterTimetable.semester;
                     const columns = generateColumns(days);
                     const dataSource = generateDataSource(
@@ -137,7 +191,9 @@ const ViewTimetable = () => {
                     }
                     return (
                       <Tabs.TabPane
-                        tab={`Semester ${semester}`}
+                        tab={`Year ${getSemName(semester).year} Semester ${
+                          getSemName(semester).sem
+                        }`}
                         key={semester}
                         className="text-lightborder"
                       >
@@ -187,6 +243,9 @@ const ViewTimetable = () => {
             </div>
             <div className="center">
               Reinforcement Learning: {evaluation?.RL?.average_score.toFixed(2)}
+            </div>
+            <div className="center">
+              <strong>Recommendation:{"    "}</strong> {nlResponse}
             </div>
           </div>
         </div>
