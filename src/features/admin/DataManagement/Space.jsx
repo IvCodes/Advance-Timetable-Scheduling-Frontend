@@ -16,6 +16,7 @@ import { getSpaces, addSpace, updateSpace, deleteSpace } from "./data.api";
 
 const Space = () => {
   const spaces = useSelector((state) => state.data.spaces);
+  const loading = useSelector((state) => state.data.loading);
   const dispatch = useDispatch();
 
   const [filteredSpaces, setFilteredSpaces] = useState(spaces);
@@ -34,10 +35,12 @@ const Space = () => {
   const handleAddEditSpace = (values) => {
     console.log("here", values);
     if (editingSpace) {
-      dispatch(updateSpace({ ...editingSpace, ...values }));
+      dispatch(updateSpace(values));
+      dispatch(getSpaces());
       message.success("Space updated successfully!");
     } else {
       dispatch(addSpace(values));
+      dispatch(getSpaces());
       message.success("Space added successfully!");
     }
     setIsModalVisible(false);
@@ -46,6 +49,7 @@ const Space = () => {
 
   const handleDeleteSpace = (key) => {
     dispatch(deleteSpace(key));
+    dispatch(getSpaces());
     message.success("Space deleted successfully!");
   };
 
@@ -91,7 +95,7 @@ const Space = () => {
           </Button>
           <Popconfirm
             title="Are you sure to delete this space?"
-            onConfirm={() => handleDeleteSpace(record.key)}
+            onConfirm={() => handleDeleteSpace(record.code)}
             okText="Yes"
             cancelText="No"
           >
@@ -128,6 +132,7 @@ const Space = () => {
         }}
       >
         <Table
+          loading={loading}
           columns={columns}
           dataSource={filteredSpaces}
           rowKey="key"
@@ -170,6 +175,7 @@ const Space = () => {
               {
                 required: true,
                 message: "Code must be alphanumeric and 3-10 characters",
+                pattern: "^[A-Z0-9]{3,10}$",
               },
             ]}
           >
