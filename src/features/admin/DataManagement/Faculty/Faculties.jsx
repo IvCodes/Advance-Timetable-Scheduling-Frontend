@@ -82,9 +82,11 @@ export default function Faculties() {
     if (editingFaculty) {
       dispatch(updateFaculties(values));
       message.success("Faculty updated successfully!");
+      dispatch(getFaculties());
     } else {
       dispatch(addFaculty(values));
       message.success("Faculty added successfully!");
+      dispatch(getFaculties());
     }
     setIsModalVisible(false);
     form.resetFields();
@@ -94,6 +96,7 @@ export default function Faculties() {
     console.log(key);
     dispatch(deleteFaculties(key));
     message.success("Faculty deleted successfully!");
+    dispatch(getFaculties());
   };
 
   return (
@@ -124,17 +127,50 @@ export default function Faculties() {
             name="short_name"
             rules={[
               { required: true, message: "Please enter a unique short name" },
+              {
+                pattern: /^[a-zA-Z0-9\s]+$/,
+                message:
+                  "Short name can only contain letters, numbers, and spaces",
+              },
+              {
+                max: 50,
+                message: "Short name cannot exceed 50 characters",
+              },
             ]}
           >
             <Input placeholder="Enter faculty short name" />
           </Form.Item>
 
-          <Form.Item label="Long Name" name="long_name">
+          <Form.Item
+            label="Long Name"
+            name="long_name"
+            rules={[
+              { required: true, message: "Please enter the long name" },
+              {
+                max: 100,
+                message: "Long name cannot exceed 100 characters",
+              },
+            ]}
+          >
             <Input placeholder="Enter long name" />
           </Form.Item>
 
-          <Form.Item label="Code" name="code">
-            <Input placeholder="Enter code " />
+          <Form.Item
+            label="Code"
+            name="code"
+            rules={[
+              { required: true, message: "Please enter a code" },
+              {
+                pattern: /^[A-Z0-9]+$/,
+                message: "Code can only contain uppercase letters and numbers",
+              },
+              {
+                max: 10,
+                message: "Code cannot exceed 10 characters",
+              },
+            ]}
+          >
+            <Input placeholder="Enter code" />
           </Form.Item>
 
           <Form.Item>
