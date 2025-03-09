@@ -32,6 +32,9 @@ const timetableSlice = createSlice({
     setError: (state, action) => {
       state.error = action.payload;
     },
+    setGenerating: (state, action) => {
+      state.generating = action.payload;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -39,7 +42,7 @@ const timetableSlice = createSlice({
         state.generating = true;
       })
       .addCase(generateTimetable.fulfilled, (state, action) => {
-        state.generating = false;
+        // Leave generating state as true - it will be set to false via SSE
       })
       .addCase(generateTimetable.rejected, (state, action) => {
         state.generating = false;
@@ -102,5 +105,5 @@ const timetableSlice = createSlice({
   },
 });
 
-export const { setTimetable, setLoading, setError } = timetableSlice.actions;
+export const { setTimetable, setLoading, setError, setGenerating } = timetableSlice.actions;
 export default timetableSlice.reducer;

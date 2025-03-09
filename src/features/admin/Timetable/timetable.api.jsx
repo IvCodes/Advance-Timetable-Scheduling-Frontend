@@ -1,9 +1,11 @@
 import { createAsyncThunk } from "@reduxjs/toolkit";
 import makeApi from "../../../config/axiosConfig";
-import Groq from "groq-sdk";  
+import { OpenAI } from "openai";
 
-const client = new Groq({
-  apiKey: "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",
+// Configure OpenAI client to use OpenRouter
+const client = new OpenAI({
+  apiKey: import.meta.env.VITE_OPENROUTER_API_KEY,  // Changed from process.env
+  baseURL: "https://openrouter.ai/api/v1",
   dangerouslyAllowBrowser: true,
 });
 
@@ -25,19 +27,13 @@ export const getTimetable = createAsyncThunk(
   }
 );
 
-// export const llmResponse = createAsyncThunk("timetable/llm", async (scores) => {
-//   const stri = scores.join(" ");
-//   console.log(stri);
-//   // const chatCompletion = await client.chat.completions.create({
-//   //   messages: [
-//   //     { role: "user", content: "Explain the importance of low latency LLMs" },
-//   //   ],import { llmResponse } from './timetable.api';
-
-//   //   model: "llama3-8b-8192",
-//   // });
-//   // console.log(chatCompletion);
-//   // return chatCompletion.choices[0].message.content;
-// });
+export const markAllNotificationsRead = createAsyncThunk(
+  'notifications/markAllRead',
+  async () => {
+    const response = await api.put('/timetable/notifications/mark-all-read');
+    return response.data;
+  }
+);
 
 export const selectAlgorithm = createAsyncThunk(
   "timetable/select",
@@ -63,18 +59,44 @@ export const llmResponse = async (scores) => {
 The following are evaluation scores for different algorithms used in a timetable scheduling optimization project:
 ${evaluationSummary}
 
-Based on these results of this round of generation, provide a small analysis of the suitaility of the algorithm. Do not use more than 60 words. Also remember that the algorithms are in the early stage of development. First mention the scores of each algorithm and then provide the analysis.
+Based on these results, provide an analysis of each algorithm in this format:
+1. First, list the algorithms from best to worst based on their scores
+2. Then, for each algorithm, provide a 1-2 sentence description of its suitability for timetable generation
+3. Finally, provide a clear recommendation about which algorithm should be used and why
+
+Keep your entire response under 150 words. Be specific about the strengths and weaknesses of each algorithm based on the metrics provided.
 `;
 
   console.log("Prompt for LLM:", prompt);
 
-  const chatCompletion = await client.chat.completions.create({
-    messages: [{ role: "user", content: prompt }],
-    model: "llama3-8b-8192",
-  });
+  try {
+    // Using the OpenRouter API with the correct parameters format
+    const completion = await client.chat.completions.create({
+      model: "deepseek/deepseek-chat:free",
+      messages: [
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      temperature: 0.7,
+      max_tokens: 250,
+      headers: {
+        "HTTP-Referer": window.location.origin, // Required for OpenRouter
+        "X-Title": "Timetable Evaluation System" // Site title for OpenRouter rankings
+      }
+    });
 
-  console.log("LLM Response:", chatCompletion);
-  return chatCompletion.choices[0].message.content;
+    console.log("OpenRouter Response:", completion);
+    return completion.choices[0].message.content;
+  } catch (error) {
+    console.error("Error with OpenRouter API:", error);
+    // Log detailed error information for debugging
+    if (error.response) {
+      console.error("Error details:", error.response.data);
+    }
+    return "Error generating recommendation. Please try again later.";
+  }
 };
 
 function formatScoresForAPI(evaluation) {

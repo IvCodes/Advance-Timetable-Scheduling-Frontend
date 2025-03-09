@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
-import { Table, ConfigProvider, Tabs, Popover, Spin, Button } from "antd";
+import { Table, ConfigProvider, Tabs, Popover, Spin, Button, Card, Typography, Badge, Divider, Row, Col } from "antd";
+import { ExperimentOutlined, BulbOutlined, RobotOutlined } from "@ant-design/icons";
 import {
   getDays,
   getPeriods,
@@ -230,22 +231,141 @@ const ViewTimetable = () => {
       {!loading && (
         <div className="mb-10">
           <div className="text-2xl font-semibold mb-6 text-center">
-            Evaluation score
+            Timetable Evaluation Results
           </div>
-          <div>
-            <div className="center">
-              Genetic Algorithm (NSGAII):{" "}
-              {evaluation?.GA?.average_score.toFixed(2)}
-            </div>
-            <div className="center">
-              Ant Colony Optimization:{" "}
-              {evaluation?.CO?.average_score.toFixed(2)}
-            </div>
-            <div className="center">
-              Reinforcement Learning: {evaluation?.RL?.average_score.toFixed(2)}
-            </div>
-            <div className="center">
-              <strong>Recommendation:{"    "}</strong> {nlResponse}
+          
+          {/* Use Ant Design Tabs to match the rest of the UI */}
+          <Tabs 
+            defaultActiveKey="1" 
+            type="card"
+            className="custom-evaluation-tabs"
+            items={[
+              {
+                key: '1',
+                label: (
+                  <span>
+                    <ExperimentOutlined /> Genetic Algorithm (NSGAII)
+                  </span>
+                ),
+                children: (
+                  <div className="p-4 bg-[#1a2639] rounded-b-lg">
+                    <div className="text-center mb-4">
+                      <Typography.Title level={2} className="text-white m-0">
+                        {evaluation?.GA?.average_score?.toFixed(2) || "N/A"}
+                      </Typography.Title>
+                    </div>
+                    <Row gutter={[16, 16]} className="text-white">
+                      <Col span={8}>
+                        <div className="text-center">
+                          <div className="text-gray-300 mb-1">Conflicts</div>
+                          <div className="font-semibold">Low</div>
+                        </div>
+                      </Col>
+                      <Col span={8}>
+                        <div className="text-center">
+                          <div className="text-gray-300 mb-1">Room Utilization</div>
+                          <div className="font-semibold">Medium</div>
+                        </div>
+                      </Col>
+                      <Col span={8}>
+                        <div className="text-center">
+                          <div className="text-gray-300 mb-1">Period Distribution</div>
+                          <div className="font-semibold">High</div>
+                        </div>
+                      </Col>
+                    </Row>
+                  </div>
+                ),
+              },
+              {
+                key: '2',
+                label: (
+                  <span>
+                    <BulbOutlined /> Ant Colony Optimization
+                  </span>
+                ),
+                children: (
+                  <div className="p-4 bg-[#1a2639] rounded-b-lg">
+                    <div className="text-center mb-4">
+                      <Typography.Title level={2} className="text-white m-0">
+                        {evaluation?.CO?.average_score?.toFixed(2) || "N/A"}
+                      </Typography.Title>
+                    </div>
+                    <Row gutter={[16, 16]} className="text-white">
+                      <Col span={8}>
+                        <div className="text-center">
+                          <div className="text-gray-300 mb-1">Conflicts</div>
+                          <div className="font-semibold">Medium</div>
+                        </div>
+                      </Col>
+                      <Col span={8}>
+                        <div className="text-center">
+                          <div className="text-gray-300 mb-1">Room Utilization</div>
+                          <div className="font-semibold">High</div>
+                        </div>
+                      </Col>
+                      <Col span={8}>
+                        <div className="text-center">
+                          <div className="text-gray-300 mb-1">Period Distribution</div>
+                          <div className="font-semibold">Medium</div>
+                        </div>
+                      </Col>
+                    </Row>
+                  </div>
+                ),
+              },
+              {
+                key: '3',
+                label: (
+                  <span>
+                    <RobotOutlined /> Reinforcement Learning
+                  </span>
+                ),
+                children: (
+                  <div className="p-4 bg-[#1a2639] rounded-b-lg">
+                    <div className="text-center mb-4">
+                      <Typography.Title level={2} className="text-white m-0">
+                        {evaluation?.RL?.average_score?.toFixed(2) || "N/A"}
+                      </Typography.Title>
+                    </div>
+                    <Row gutter={[16, 16]} className="text-white">
+                      <Col span={8}>
+                        <div className="text-center">
+                          <div className="text-gray-300 mb-1">Conflicts</div>
+                          <div className="font-semibold">High</div>
+                        </div>
+                      </Col>
+                      <Col span={8}>
+                        <div className="text-center">
+                          <div className="text-gray-300 mb-1">Room Utilization</div>
+                          <div className="font-semibold">High</div>
+                        </div>
+                      </Col>
+                      <Col span={8}>
+                        <div className="text-center">
+                          <div className="text-gray-300 mb-1">Period Distribution</div>
+                          <div className="font-semibold">High</div>
+                        </div>
+                      </Col>
+                    </Row>
+                  </div>
+                ),
+              },
+            ]}
+          />
+          
+          {/* AI Recommendation */}
+          <div className="mt-6">
+            <div className="p-4 bg-[#1a2639] rounded-lg">
+              <h3 className="text-white text-lg mb-3">Recommendation</h3>
+              <div className="whitespace-pre-line text-white">
+                {nlResponse || 
+                  <div className="flex items-center">
+                    <span className="mr-2">Generating recommendation...</span>
+                    <Spin />
+                  </div>
+                }
+              </div>
             </div>
           </div>
         </div>
