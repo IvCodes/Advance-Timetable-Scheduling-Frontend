@@ -7,7 +7,7 @@ import { useSelector, useDispatch } from "react-redux";
 import { useNavigate } from "react-router-dom";
 
 function Login() {
-  const [credentials, setCredentials] = useState({ id: "", password: "" });
+  const [credentials, setCredentials] = useState({ username: "", password: "" });
   const { loading, error } = useSelector((state) => state.auth);
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -27,7 +27,7 @@ function Login() {
       
       // Ensure we're using the correct login credentials structure
       const credentials = {
-        username: values.id,
+        username: values.username, // This can be either username or ID
         password: values.password,
       };
       
@@ -109,18 +109,13 @@ function Login() {
               labelCol={{ span: 24 }}
             >
               <Form.Item
-                label={<span className="text-gwhite">ID</span>}
-                name="id"
+                label={<span className="text-gwhite">Username or ID</span>}
+                name="username"
                 rules={[
-                  { required: true, message: "Please enter your ID" },
-                  {
-                    pattern: /^(AD|FA|ST)\d{7}$/,
-                    message:
-                      "ID must start with FA, AD or ST followed by 7 digits",
-                  },
+                  { required: true, message: "Please enter your Username or ID" },
                 ]}
               >
-                <Input type="text" placeholder="Enter your ID" />
+                <Input type="text" placeholder="Enter your Username or ID" />
               </Form.Item>
 
               <Form.Item
