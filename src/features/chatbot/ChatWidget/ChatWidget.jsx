@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Card, Input, Button, Typography, List, Avatar, Spin, Tooltip } from 'antd';
-import { SendOutlined, CloseOutlined, CommentOutlined } from '@ant-design/icons';
+import { Card, Input, Button, Typography, Avatar, Spin, Tooltip, Badge } from 'antd';
+import { SendOutlined, CloseOutlined, CommentOutlined, CloseCircleOutlined } from '@ant-design/icons';
 import { useSelector, useDispatch } from 'react-redux';
 import PropTypes from 'prop-types';
 import './ChatWidget.css';
 import { ChatSuggestion } from '../ChatSuggestion/ChatSuggestion';
 import { sendChatMessage, clearError } from '../chatSlice';
 
-const { Text } = Typography;
+const { Text, Title } = Typography;
 
 /**
  * ChatWidget component provides a floating chat interface for interacting with the timetable assistant.
@@ -16,7 +16,9 @@ const { Text } = Typography;
 function ChatWidget({ position = 'bottom-right' }) {
   const [isOpen, setIsOpen] = useState(false);
   const [message, setMessage] = useState('');
+  const [isSuggestionsVisible, setIsSuggestionsVisible] = useState(true);
   const chatEndRef = useRef(null);
+  const inputRef = useRef(null);
   const dispatch = useDispatch();
   
   const { 
@@ -33,6 +35,15 @@ function ChatWidget({ position = 'bottom-right' }) {
       chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages]);
+  
+  // Focus input when chat opens
+  useEffect(() => {
+    if (isOpen && inputRef.current) {
+      setTimeout(() => {
+        inputRef.current.focus();
+      }, 300);
+    }
+  }, [isOpen]);
   
   // Open chat if there's an error to display it
   useEffect(() => {
@@ -72,6 +83,8 @@ function ChatWidget({ position = 'bottom-right' }) {
       }));
       
       setMessage('');
+      // Show suggestions after sending a message
+      setIsSuggestionsVisible(true);
     }
   };
   
@@ -82,35 +95,40 @@ function ChatWidget({ position = 'bottom-right' }) {
     }));
   };
   
+  const toggleSuggestions = () => {
+    setIsSuggestionsVisible(!isSuggestionsVisible);
+  };
+  
   const renderChatMessages = () => {
     return (
-      <List
-        className="chat-message-list"
-        itemLayout="horizontal"
-        dataSource={messages}
-        renderItem={(msg) => (
-          <List.Item className={`chat-message ${msg.role === 'user' ? 'user-message' : 'assistant-message'}`}>
-            <List.Item.Meta
-              avatar={
-                msg.role === 'user' 
-                  ? <Avatar style={{ backgroundColor: '#1890ff' }}>U</Avatar>
-                  : <Avatar style={{ backgroundColor: '#52c41a' }}>A</Avatar>
+      <div className="chat-message-list">
+        {messages.map((msg, index) => (
+          <div 
+            key={`msg-${index}`}
+            className={`chat-message ${msg.role === 'user' ? 'user-message' : 'assistant-message'}`}
+          >
+            <div className="message-avatar">
+              {msg.role === 'user' 
+                ? <Avatar className="avatar-user">U</Avatar>
+                : <Avatar className="avatar-assistant">A</Avatar>
               }
-              title={msg.role === 'user' ? 'You' : 'Assistant'}
-              description={
-                <div className="message-content">
-                  <Text>{msg.content}</Text>
-                  {msg.timestamp && (
-                    <Text type="secondary" className="message-time">
-                      {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </Text>
-                  )}
-                </div>
-              }
-            />
-          </List.Item>
-        )}
-      />
+            </div>
+            <div className="message-bubble">
+              <div className="message-sender">
+                {msg.role === 'user' ? 'You' : 'Assistant'}
+              </div>
+              <div className="message-content">
+                <Text style={{ color: msg.role === 'user' ? 'white' : '#f0f0f0', whiteSpace: 'pre-wrap' }}>{msg.content}</Text>
+                {msg.timestamp && (
+                  <Text type="secondary" className="message-time">
+                    {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </Text>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
     );
   };
   
@@ -121,16 +139,18 @@ function ChatWidget({ position = 'bottom-right' }) {
           className="chat-widget-card"
           title={
             <div className="chat-widget-header">
-              <Text strong>Timetable Assistant</Text>
+              <Title level={5} style={{ margin: 0, color: '#f0f0f0' }}>Timetable Assistant</Title>
               <Button 
                 type="text" 
-                icon={<CloseOutlined />} 
+                icon={<CloseOutlined style={{ color: '#f0f0f0' }} />} 
                 onClick={handleClose} 
                 className="close-button"
+                style={{ marginRight: -8 }}
               />
             </div>
           }
           bordered={true}
+          headStyle={{ padding: 0, borderBottom: 'none' }}
         >
           <div className="chat-messages-container">
             {renderChatMessages()}
@@ -138,7 +158,7 @@ function ChatWidget({ position = 'bottom-right' }) {
             {isLoading && (
               <div className="loading-indicator">
                 <Spin size="small" />
-                <Text type="secondary">Thinking...</Text>
+                <Text style={{ color: '#f0f0f0' }}>Thinking...</Text>
               </div>
             )}
             
@@ -151,15 +171,27 @@ function ChatWidget({ position = 'bottom-right' }) {
             <div ref={chatEndRef} />
           </div>
           
-          {suggestions && suggestions.length > 0 && (
+          {suggestions && suggestions.length > 0 && isSuggestionsVisible && (
             <div className="chat-suggestions">
-              {suggestions.map((suggestion) => (
-                <ChatSuggestion 
-                  key={`suggestion-${suggestion}`} 
-                  text={suggestion} 
-                  onClick={() => handleSuggestionClick(suggestion)} 
+              <div className="suggestions-header">
+                <Text style={{ color: '#aaa', fontSize: '12px' }}>Suggested questions</Text>
+                <Button 
+                  type="text" 
+                  size="small" 
+                  icon={<CloseCircleOutlined style={{ color: '#aaa' }} />} 
+                  onClick={toggleSuggestions}
+                  style={{ padding: '0', marginLeft: 'auto' }}
                 />
-              ))}
+              </div>
+              <div className="suggestions-container">
+                {suggestions.map((suggestion) => (
+                  <ChatSuggestion 
+                    key={`suggestion-${suggestion}`} 
+                    text={suggestion} 
+                    onClick={() => handleSuggestionClick(suggestion)} 
+                  />
+                ))}
+              </div>
             </div>
           )}
           
@@ -171,7 +203,9 @@ function ChatWidget({ position = 'bottom-right' }) {
               onKeyPress={handleKeyPress}
               placeholder="Ask about your timetable..."
               autoSize={{ minRows: 1, maxRows: 3 }}
+              style={{ color: '#f0f0f0', backgroundColor: '#3a3a3a' }}
               disabled={isLoading}
+              ref={inputRef}
             />
             <Button 
               type="primary" 
@@ -184,14 +218,17 @@ function ChatWidget({ position = 'bottom-right' }) {
         </Card>
       ) : (
         <Tooltip title="Chat with Timetable Assistant">
-          <Button 
-            type="primary" 
-            shape="circle" 
-            size="large"
-            icon={<CommentOutlined />} 
-            onClick={toggleChat}
-            className="chat-widget-button"
-          />
+          <Badge dot={!!error}>
+            <Button 
+              type="primary" 
+              shape="circle" 
+              size="large"
+              icon={<CommentOutlined style={{ fontSize: '28px' }} />} 
+              onClick={toggleChat}
+              className="chat-widget-button"
+              style={{ backgroundColor: '#1D80E9', borderColor: '#1D80E9' }}
+            />
+          </Badge>
         </Tooltip>
       )}
     </div>
@@ -199,7 +236,7 @@ function ChatWidget({ position = 'bottom-right' }) {
 }
 
 ChatWidget.propTypes = {
-  position: PropTypes.oneOf(['bottom-right', 'bottom-left', 'top-right', 'top-left']),
+  position: PropTypes.oneOf(['bottom-right', 'bottom-left', 'top-right', 'top-left'])
 };
 
 export default ChatWidget;

@@ -1,7 +1,8 @@
 .chat-suggestion {
-  font-size: 12px;
+  font-size: 13px;
   border-radius: 16px;
-  background-color: #f0f2f5;
+  background-color: #3a3a3a;
+  color: #f0f0f0;
   border: none;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -10,10 +11,19 @@
   margin-right: 4px;
   margin-bottom: 4px;
   transition: all 0.3s;
+  padding: 6px 12px;
+  cursor: pointer;
+  display: inline-block;
 }
 
 .chat-suggestion:hover {
-  background-color: #e6f7ff;
-  border-color: #1890ff;
-  color: #1890ff;
+  background-color: #1890ff;
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.5);
+}
+
+.chat-suggestion:active {
+  transform: translateY(0);
+  box-shadow: none;
 }
