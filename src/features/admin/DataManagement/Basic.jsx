@@ -8,6 +8,7 @@ import {
   message,
   ConfigProvider,
   Checkbox,
+  Spin,
 } from "antd";
 const { TextArea } = Input;
 import GoldButton from "./../../../components/buttons/GoldButton";
@@ -227,6 +228,11 @@ const Basic = () => {
             style={{ color: "white" }}
             rules={[
               { required: true, message: "Please enter institution name" },
+              {
+                pattern: /^[a-zA-Z0-9\s]+$/,
+                message:
+                  "Institution name can only contain letters and numbers",
+              },
             ]}
           >
             <Input placeholder="Enter institution name" />
@@ -259,27 +265,32 @@ const Basic = () => {
         </Form>
       ) : (
         <div>
-          <p className="mb-4">
-            <strong className="text-gold-darker">Institution Name:</strong>{" "}
-            {institutionData?.institution_name}
-          </p>
-          <p className="mb-4">
-            <strong className="text-gold-darker">Description:</strong>{" "}
-            {institutionData?.description}
-          </p>
+          <div>
+            <p className="text-gold-darker font-thin text-sm">
+              Institution Name
+            </p>{" "}
+            <div className="text-2xl mb-4">
+              {institutionData?.institution_name}
+            </div>
+          </div>
+          <div className="mb-6">
+            <p className="text-gold-darker font-thin text-sm">Description</p>{" "}
+            <div className="text-lgl mb-4">{institutionData?.description}</div>
+          </div>
           <GoldButton
             type="primary"
             onClick={handleEdit}
             style={{
               backgroundColor: "var(--color-gold-dark)",
               borderColor: "var(--color-gold-dark)",
+              marginTop: "20px",
             }}
           >
             Edit
           </GoldButton>
         </div>
       )}
-      <h2 className="text-2xl font-semibold mb-6 text-center text-gold-dark">
+      <h2 className=" mt-14 text-2xl font-semibold mb-6 text-center text-gold-dark">
         Institution Days & Periods
       </h2>
 
@@ -377,7 +388,6 @@ const Basic = () => {
             <Button
               onClick={handleAddRow}
               style={{
-                backgroundColor: "var(--color-gold-dark)",
                 borderColor: "var(--color-gold-dark)",
               }}
             >
@@ -388,9 +398,7 @@ const Basic = () => {
               disabled={localPeriods.length === 0}
               style={{
                 backgroundColor: `${
-                  localPeriods.length === 0
-                    ? "transparent"
-                    : "var(--color-gold-dark)"
+                  localPeriods.length === 0 ? "transparent" : ""
                 }`,
                 borderColor: "transparent",
                 marginLeft: "20px",

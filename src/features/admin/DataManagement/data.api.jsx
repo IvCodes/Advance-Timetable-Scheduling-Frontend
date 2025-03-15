@@ -208,6 +208,51 @@ export const getTeachers = createAsyncThunk(
   }
 );
 
+export const addTeacher = createAsyncThunk(
+  "data/addTeacher",
+  async (data, { rejectWithValue }) => {
+    try {
+      const response = await api.post(`/users/register`, data);
+      return response.data;
+    } catch (error) {
+      if (error.response && error.response.data) {
+        return rejectWithValue(error.response.data.detail);
+      }
+      return rejectWithValue("An error occurred while adding the teacher.");
+    }
+  }
+);
+
+export const updateTeacher = createAsyncThunk(
+  "data/updateTeacher",
+  async (data, { rejectWithValue }) => {
+    try {
+      const response = await api.put(`/users/faculty/${data.id}`, data);
+      return response.data;
+    } catch (error) {
+      if (error.response && error.response.data) {
+        return rejectWithValue(error.response.data.detail);
+      }
+      return rejectWithValue("An error occurred while updating the teacher.");
+    }
+  }
+);
+
+export const deleteTeacher = createAsyncThunk(
+  "data/deleteTeacher",
+  async (data, { rejectWithValue }) => {
+    try {
+      const response = await api.delete(`/users/faculty/${data}`);
+      return response.data;
+    } catch (error) {
+      if (error.response && error.response.data) {
+        return rejectWithValue(error.response.data.detail);
+      }
+      return rejectWithValue("An error occurred while deleting the teacher.");
+    }
+  }
+);
+
 export const getSpaces = createAsyncThunk(
   "data/getSpaces",
   async (data, { rejectWithValue }) => {
@@ -242,7 +287,7 @@ export const updateSpace = createAsyncThunk(
   "data/updateSpaces",
   async (data, { rejectWithValue }) => {
     try {
-      const response = await api.put(`/space/spaces`, data);
+      const response = await api.put(`/space/spaces/${data.code}`, data);
       return response.data;
     } catch (error) {
       if (error.response && error.response.data) {

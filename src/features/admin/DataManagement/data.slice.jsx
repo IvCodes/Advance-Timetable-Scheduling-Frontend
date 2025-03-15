@@ -18,6 +18,9 @@ import {
   addActivity,
   updateActivity,
   deleteActivity,
+  addTeacher,
+  updateTeacher,
+  deleteTeacher,
 } from "./data.api";
 
 const initialState = {
@@ -112,7 +115,7 @@ const dataSlice = createSlice({
       })
       .addCase(addSubjects.fulfilled, (state, action) => {
         state.loading = false;
-        state.subjects = action.payload;
+        // state.subjects = action.payload;
       })
       .addCase(addSubjects.rejected, (state, action) => {
         state.loading = false;
@@ -123,7 +126,7 @@ const dataSlice = createSlice({
       })
       .addCase(updateSubjects.fulfilled, (state, action) => {
         state.loading = false;
-        state.subjects = action.payload;
+        // state.subjects = action.payload;
       })
       .addCase(updateSubjects.rejected, (state, action) => {
         state.loading = false;
@@ -134,7 +137,7 @@ const dataSlice = createSlice({
       })
       .addCase(deleteSubjects.fulfilled, (state, action) => {
         state.loading = false;
-        state.subjects = action.payload;
+        // state.subjects = action.payload;
       })
       .addCase(deleteSubjects.rejected, (state, action) => {
         state.loading = false;
@@ -167,7 +170,6 @@ const dataSlice = createSlice({
       })
       .addCase(addSpace.fulfilled, (state, action) => {
         state.loading = false;
-        state.spaces = action.payload;
       })
       .addCase(addSpace.rejected, (state, action) => {
         state.loading = false;
@@ -178,7 +180,6 @@ const dataSlice = createSlice({
       })
       .addCase(updateSpace.fulfilled, (state, action) => {
         state.loading = false;
-        state.spaces = action.payload;
       })
       .addCase(updateSpace.rejected, (state, action) => {
         state.loading = false;
@@ -189,7 +190,6 @@ const dataSlice = createSlice({
       })
       .addCase(deleteSpace.fulfilled, (state, action) => {
         state.loading = false;
-        state.spaces = action.payload;
       })
       .addCase(deleteSpace.rejected, (state, action) => {
         state.loading = false;
@@ -236,6 +236,36 @@ const dataSlice = createSlice({
         state.activities = action.payload;
       })
       .addCase(deleteActivity.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(addTeacher.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(addTeacher.fulfilled, (state, action) => {
+        state.loading = false;
+      })
+      .addCase(addTeacher.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(updateTeacher.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(updateTeacher.fulfilled, (state, action) => {
+        state.loading = false;
+      })
+      .addCase(updateTeacher.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(deleteTeacher.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(deleteTeacher.fulfilled, (state, action) => {
+        state.loading = false;
+      })
+      .addCase(deleteTeacher.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       });

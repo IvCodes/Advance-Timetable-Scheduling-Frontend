@@ -21,7 +21,7 @@ import {
   getTeachers,
 } from "./data.api";
 import { getYears } from "../../authentication/auth.api";
-import { use } from "framer-motion/client";
+import { usePresence } from "framer-motion";
 
 const Activities = () => {
   const activities = useSelector((state) => state.data.activities);
@@ -234,9 +234,15 @@ const Activities = () => {
             <Select
               mode="multiple"
               placeholder="Select teachers"
+              showSearch={true}
               options={teachers.map((teacher) => ({
                 value: teacher.id,
-                label: teacher.name,
+                label:
+                  teacher.id +
+                  " - " +
+                  teacher.first_name +
+                  " " +
+                  teacher.last_name,
               }))}
             />
           </Form.Item>

@@ -1,17 +1,11 @@
-import { createSlice } from '@reduxjs/toolkit';
-import { Roles } from '../../assets/constants';
+import { createSlice } from "@reduxjs/toolkit";
+import { Roles } from "../../assets/constants";
+import { loginUser, registerUser, getFaculties, getYears } from "./auth.api";
 import {
-  loginUser,
-  registerUser,
-  getFaculties,
-  getYears,
-  addYear,
-  updateYear,
-  deleteYear,
-  logout as logoutAction
-} from './auth.api';
-
-
+  addFaculty,
+  updateFaculties,
+  deleteFaculties,
+} from "../admin/DataManagement/data.api";
 
 const initialState = {
   isAuthenticated: false,
@@ -30,129 +24,120 @@ const authSlice = createSlice({
     changeRole: (state, action) => {
       state.role = action.payload;
     },
-    clearError: (state) => {
-      state.error = null;
+    logout: (state) => {
+      localStorage.removeItem("token");
+      localStorage.removeItem("role");
+      state.isAuthenticated = false;
+      state.user = null;
+      state.role = null;
     },
     restoreUser: (state, action) => {
-      state.isAuthenticated = true;
-      state.user = action.payload.user;
-      state.role = action.payload.role;
+      const { token, role, user } = action.payload;
+      
+      console.log("Restoring user session with token:", token);
+      console.log("User role:", role);
+      
+      if (token && role) {
+        state.isAuthenticated = true;
+        state.role = role;
+        state.user = user || { role };
+        
+        console.log("User session restored successfully");
+      } else {
+        console.warn("Cannot restore user session - missing token or role");
+        state.isAuthenticated = false;
+        state.role = null;
+        state.user = null;
+      }
     },
   },
   extraReducers: (builder) => {
     builder
-      // Register cases
       .addCase(registerUser.pending, (state) => {
         state.loading = true;
-        state.error = null;
       })
       .addCase(registerUser.fulfilled, (state, action) => {
         state.loading = false;
         state.isAuthenticated = true;
         state.user = action.payload;
         state.role = action.payload.role || Roles.STUDENT;
-        state.error = null;
       })
       .addCase(registerUser.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
         state.isAuthenticated = false;
       })
-      // Login cases
       .addCase(loginUser.pending, (state) => {
         state.loading = true;
-        state.error = null;
       })
       .addCase(loginUser.fulfilled, (state, action) => {
         state.loading = false;
         state.isAuthenticated = true;
         state.user = action.payload;
         state.role = action.payload.role || Roles.STUDENT;
-        state.error = null;
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
         state.isAuthenticated = false;
       })
-      // Logout case
-      .addCase(logoutAction.fulfilled, (state) => {
-        return initialState;
-      })
-      // Get Faculties cases
       .addCase(getFaculties.pending, (state) => {
         state.loading = true;
-        state.error = null;
       })
       .addCase(getFaculties.fulfilled, (state, action) => {
         state.loading = false;
         state.faculties = action.payload;
-        state.error = null;
       })
       .addCase(getFaculties.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })
-      // Get Years cases
       .addCase(getYears.pending, (state) => {
         state.loading = true;
-        state.error = null;
       })
       .addCase(getYears.fulfilled, (state, action) => {
         state.loading = false;
         state.years = action.payload;
-        state.error = null;
       })
       .addCase(getYears.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })
-      // Add Year cases
-      .addCase(addYear.pending, (state) => {
+      .addCase(addFaculty.pending, (state) => {
         state.loading = true;
-        state.error = null;
       })
-      .addCase(addYear.fulfilled, (state, action) => {
+      .addCase(addFaculty.fulfilled, (state, action) => {
         state.loading = false;
-        state.years = [...state.years, action.payload];
-        state.error = null;
+        state.faculties.push(action.payload);
       })
-      .addCase(addYear.rejected, (state, action) => {
+      .addCase(addFaculty.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })
-      // Update Year cases
-      .addCase(updateYear.pending, (state) => {
+      .addCase(updateFaculties.pending, (state) => {
         state.loading = true;
-        state.error = null;
       })
-      .addCase(updateYear.fulfilled, (state, action) => {
+      .addCase(updateFaculties.fulfilled, (state, action) => {
         state.loading = false;
-        state.years = state.years.map(year => 
-          year.id === action.payload.id ? action.payload : year
-        );
-        state.error = null;
+        state.faculties = action.payload;
       })
-      .addCase(updateYear.rejected, (state, action) => {
+      .addCase(updateFaculties.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })
-      // Delete Year cases
-      .addCase(deleteYear.pending, (state) => {
+      .addCase(deleteFaculties.pending, (state) => {
         state.loading = true;
-        state.error = null;
       })
-      .addCase(deleteYear.fulfilled, (state, action) => {
+      .addCase(deleteFaculties.fulfilled, (state, action) => {
         state.loading = false;
-        state.years = state.years.filter(year => year.id !== action.payload);
-        state.error = null;
+        state.faculties = action.payload;
       })
-      .addCase(deleteYear.rejected, (state, action) => {
+      .addCase(deleteFaculties.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       });
   },
 });
 
-export const { changeRole, clearError, restoreUser } = authSlice.actions;
+export const { changeRole, logout, restoreUser } = authSlice.actions;
 export default authSlice.reducer;

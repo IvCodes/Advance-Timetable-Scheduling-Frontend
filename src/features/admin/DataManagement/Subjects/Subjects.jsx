@@ -20,7 +20,7 @@ import {
 import { useEffect } from "react";
 
 const Subjects = () => {
-  const { subjects } = useSelector((state) => state.data);
+  const { subjects, loading } = useSelector((state) => state.data);
 
   const [filteredSubjects, setFilteredSubjects] = useState(subjects);
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -39,17 +39,16 @@ const Subjects = () => {
   }, [subjects]);
 
   const handleAddEditSubject = (values) => {
+    console.log(values);
     if (editingSubject) {
-      const updatedSubjects = subjects.map((subject) =>
-        subject.key === editingSubject.key ? { ...subject, ...values } : subject
-      );
-      setSubjects(updatedSubjects);
-      setFilteredSubjects(updatedSubjects);
+      dispatch(updateSubjects({ ...editingSubject, ...values }));
+      dispatch(getSubjects());
       message.success("Subject updated successfully!");
     } else {
+      dispatch(addSubjects(values));
+      dispatch(getSubjects());
+      console.log(subjects);
       const newSubject = { key: subjects.length + 1, ...values };
-      setSubjects([...subjects, newSubject]);
-      setFilteredSubjects([...subjects, newSubject]);
       message.success("Subject added successfully!");
     }
     setIsModalVisible(false);
@@ -57,10 +56,9 @@ const Subjects = () => {
   };
 
   const handleDeleteSubject = (key) => {
-    const updatedSubjects = subjects.filter((subject) => subject.key !== key);
-    setSubjects(updatedSubjects);
-    setFilteredSubjects(updatedSubjects);
+    dispatch(deleteSubjects(key));
     message.success("Subject deleted successfully!");
+    dispatch(getSubjects());
   };
 
   const showAddEditModal = (subject = null) => {
@@ -76,9 +74,9 @@ const Subjects = () => {
   const handleSearch = (value) => {
     const filtered = subjects.filter(
       (subject) =>
-        subject.name.toLowerCase().includes(value.toLowerCase()) ||
-        subject.longName.toLowerCase().includes(value.toLowerCase()) ||
-        subject.code.toLowerCase().includes(value.toLowerCase())
+        subject.name?.toLowerCase().includes(value.toLowerCase()) ||
+        subject.long_name?.toLowerCase().includes(value.toLowerCase()) ||
+        subject.code?.includes(value)
     );
     setFilteredSubjects(filtered);
   };
@@ -103,9 +101,9 @@ const Subjects = () => {
       sorter: (a, b) => a.code.localeCompare(b.code),
     },
     {
-      title: "Comments",
+      title: "Description",
       dataIndex: "description",
-      key: "comments",
+      key: "description",
     },
     {
       title: "Actions",
@@ -117,7 +115,7 @@ const Subjects = () => {
           </Button>
           <Popconfirm
             title="Are you sure to delete this subject?"
-            onConfirm={() => handleDeleteSubject(record.key)}
+            onConfirm={() => handleDeleteSubject(record.code)}
             okText="Yes"
             cancelText="No"
           >
@@ -176,6 +174,7 @@ const Subjects = () => {
         }}
       >
         <Table
+          loading={loading}
           columns={columns}
           dataSource={filteredSubjects}
           rowKey="key"
@@ -198,15 +197,30 @@ const Subjects = () => {
           <Form.Item
             label="Name"
             name="name"
-            rules={[{ required: true, message: "Please enter a name" }]}
+            rules={[
+              { required: true, message: "Please enter a name" },
+              {
+                pattern: /^[a-zA-Z0-9\s]+$/,
+                message: "Name can only contain letters, numbers, and spaces",
+              },
+              { max: 50, message: "Name cannot exceed 50 characters" },
+            ]}
           >
             <Input placeholder="Enter subject name" />
           </Form.Item>
 
           <Form.Item
             label="Long Name"
-            name="longName"
-            rules={[{ required: true, message: "Please enter a long name" }]}
+            name="long_name"
+            rules={[
+              { required: true, message: "Please enter a long name" },
+              {
+                pattern: /^[a-zA-Z0-9\s]+$/,
+                message:
+                  "Long name can only contain letters, numbers, and spaces",
+              },
+              { max: 100, message: "Long name cannot exceed 100 characters" },
+            ]}
           >
             <Input placeholder="Enter subject long name" />
           </Form.Item>
@@ -214,17 +228,29 @@ const Subjects = () => {
           <Form.Item
             label="Code"
             name="code"
-            rules={[{ required: true, message: "Please enter a subject code" }]}
+            rules={[
+              { required: true, message: "Please enter a subject code" },
+              {
+                pattern: /^[A-Z]{2,5}[0-9]{2,4}$/,
+                message:
+                  "Code must start with 2-5 uppercase letters followed by 2-4 numbers (e.g., CS101)",
+              },
+            ]}
           >
             <Input placeholder="Enter subject code" />
           </Form.Item>
 
           <Form.Item
-            label="Comments"
-            name="comments"
-            rules={[{ required: true, message: "Please enter comments" }]}
+            label="Description"
+            name="description"
+            rules={[
+              {
+                max: 250,
+                message: "Description cannot exceed 250 characters",
+              },
+            ]}
           >
-            <Input.TextArea rows={3} placeholder="Enter any comments" />
+            <Input.TextArea rows={3} placeholder="Enter any description" />
           </Form.Item>
 
           <Form.Item>
@@ -236,6 +262,7 @@ const Subjects = () => {
                 borderColor: "var(--color-gold-dark)",
                 width: "100%",
               }}
+              onClick={() => form.submit()}
             >
               {editingSubject ? "Update" : "Add"}
             </GoldButton>

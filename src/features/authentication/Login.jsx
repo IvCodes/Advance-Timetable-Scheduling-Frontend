@@ -1,135 +1,167 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import GoldButton from "../../components/buttons/GoldButton";
-import TextInput from "../../components/input/TextInput";
-import { notification } from "antd";
+import { Form, Input, notification, Spin, Button } from "antd";
+import AnimatedPage from "../../pages/AnimatedPage";
 import { loginUser } from "./auth.api";
 import { useSelector, useDispatch } from "react-redux";
 import { useNavigate } from "react-router-dom";
-import { clearError } from "./auth.slice";
 
 function Login() {
-  const [credentials, setCredentials] = useState({ id: "", password: "" });
-  const { loading, error, isAuthenticated } = useSelector((state) => state.auth);
+  const [credentials, setCredentials] = useState({ username: "", password: "" });
+  const { loading, error } = useSelector((state) => state.auth);
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const [form] = Form.useForm();
+  const [loadingState, setLoading] = useState(false);
 
-  // Redirect if already authenticated
-  useEffect(() => {
-    if (isAuthenticated) {
-      navigate("/");
-    }
-  }, [isAuthenticated, navigate]);
-
-  // Clear errors when component unmounts
-  useEffect(() => {
-    return () => {
-      dispatch(clearError());
-    };
-  }, [dispatch]);
-
-  const handleInputChange = (e) => {
-    const { id, value } = e.target;
-    setCredentials((prev) => ({ ...prev, [id]: value }));
-  };
-
-  const openNotification = (type, message, description) => {
+  const openNotificationWithIcon = (type, title, description) => {
     notification[type]({
-      message,
+      message: title,
       description,
-      placement: "topRight",
-      duration: 3,
     });
   };
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
+  const login = async (values) => {
     try {
-      const result = await dispatch(loginUser(credentials)).unwrap();
-      if (result) {
-        const { access_token, token_type, role } = result;
-        localStorage.setItem("token", `${token_type} ${access_token}`);
-        localStorage.setItem("role", role);
-        openNotification(
-          "success",
-          "Login Successful",
-          "Welcome back! You have successfully logged in."
-        );
-        navigate("/");
+      console.log("Login with values:", values);
+      
+      // Ensure we're using the correct login credentials structure
+      const credentials = {
+        username: values.username, // This can be either username or ID
+        password: values.password,
+      };
+      
+      console.log("Sending login request with credentials:", credentials);
+      setLoading(true);
+      
+      const response = await dispatch(loginUser(credentials));
+      console.log("Login response:", response);
+      
+      if (response.type.endsWith('/rejected')) {
+        const errorMessage = response.payload || "Login failed. Please check your credentials.";
+        console.error("Login error:", errorMessage);
+        openNotificationWithIcon("error", "Login Failed", errorMessage);
+        return;
       }
-    } catch (err) {
-      openNotification(
+      
+      // Extract user data from response
+      const userData = response.payload;
+      console.log("Login successful. User data:", userData);
+      
+      // Save token and role to local storage
+      if (userData.token) {
+        localStorage.setItem("token", userData.token);
+      } else if (userData.access_token) {
+        // Handle old format for backward compatibility
+        localStorage.setItem("token", userData.access_token);
+      } else {
+        console.error("No token received in login response");
+        openNotificationWithIcon("error", "Login Failed", "No authentication token received");
+        return;
+      }
+      
+      // Save user role
+      const role = userData.role || "student";
+      localStorage.setItem("role", role);
+      console.log("Saved user role:", role);
+      
+      // Save user ID for easier access
+      if (userData.id) {
+        localStorage.setItem("user_id", userData.id);
+        console.log("Saved user ID:", userData.id);
+      } else if (userData.user_id) {
+        localStorage.setItem("user_id", userData.user_id);
+        console.log("Saved user ID (from user_id field):", userData.user_id);
+      }
+      
+      // Save the full user object for reference
+      try {
+        localStorage.setItem("user", JSON.stringify({
+          id: userData.id || userData.user_id,
+          username: userData.username,
+          role: role,
+          // For students, save their subgroup information
+          ...(role === "student" && userData.subgroup && { subgroup: userData.subgroup }),
+          // Add any other necessary user fields
+        }));
+        console.log("Saved user object to localStorage");
+      } catch (error) {
+        console.error("Failed to save user object to localStorage:", error);
+      }
+      
+      // Navigate based on role
+      if (role === "admin") {
+        navigate("/admin/dashboard");
+      } else if (role === "faculty") {
+        navigate("/faculty/dashboard");
+      } else {
+        navigate("/student/dashboard");
+      }
+      
+      openNotificationWithIcon("success", "Login Successful", "Welcome back!");
+    } catch (error) {
+      console.error("Login error:", error);
+      openNotificationWithIcon(
         "error",
         "Login Failed",
-        err || "Invalid credentials. Please try again."
+        error.message || "An unexpected error occurred"
       );
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
-      <div className="w-full max-w-md space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Welcome Back
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            Sign in to your account to continue
-          </p>
-        </div>
-
-        <form className="mt-8 space-y-6" onSubmit={handleLogin}>
-          <div className="space-y-4 rounded-md shadow-sm">
+    <AnimatedPage>
+      <div className="flex flex-col justify-center items-center h-full">
+        <div className="flex flex-row w-full max-w-3xl bg-white rounded-xl shadow-lg overflow-hidden">
+          <div className="w-1/2 p-8 bg-gray-100">
+            <h2 className="text-4xl font-semibold mb-6">Welcome Back!</h2>
             <div>
-              <label htmlFor="id" className="block text-sm font-medium text-gray-700">
-                User ID
-              </label>
-              <TextInput
-                id="id"
-                name="id"
-                required
-                value={credentials.id}
-                onChange={handleInputChange}
-                placeholder="Enter your ID"
-                className="mt-1"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                Password
-              </label>
-              <TextInput
-                id="password"
-                name="password"
-                type="password"
-                required
-                value={credentials.password}
-                onChange={handleInputChange}
-                placeholder="Enter your password"
-                className="mt-1"
-              />
+              Log in to your account to access your timetable and other features
             </div>
           </div>
-
-          {error && (
-            <div className="text-sm text-red-600 text-center">
-              {error}
-            </div>
-          )}
-
-          <div>
-            <GoldButton
-              type="submit"
-              disabled={loading}
-              loading={loading}
-              className="w-full"
+          <div className="w-1/2 p-8">
+            <h2 className="text-2xl font-semibold mb-6">
+              Login to TimeTableWiz
+            </h2>
+            <Form
+              form={form}
+              name="login_form"
+              initialValues={{ remember: true }}
+              onFinish={login}
+              labelCol={{ span: 24 }}
             >
-              {loading ? "Signing in..." : "Sign in"}
-            </GoldButton>
+              <Form.Item
+                label={<span className="text-gwhite">Username or ID</span>}
+                name="username"
+                rules={[
+                  { required: true, message: "Please enter your Username or ID" },
+                ]}
+              >
+                <Input type="text" placeholder="Enter your Username or ID" />
+              </Form.Item>
+
+              <Form.Item
+                label={<span className="text-gwhite">Password</span>}
+                name="password"
+                rules={[
+                  { required: true, message: "Please enter your password" },
+                ]}
+              >
+                <Input.Password placeholder="Enter your password" />
+              </Form.Item>
+
+              <Form.Item className="mb-4 text-center">
+                <Button type="primary" htmlType="submit" bgcolor={"#243647"}>
+                  {loadingState ? <Spin /> : "Login"}
+                </Button>
+              </Form.Item>
+            </Form>
           </div>
-        </form>
+        </div>
       </div>
-    </div>
+    </AnimatedPage>
   );
 }
 
