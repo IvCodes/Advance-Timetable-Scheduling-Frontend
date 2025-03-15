@@ -1,158 +1,101 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import axios from 'axios';
+import * as api from './chat.api';
 
-/**
- * Async thunk to send a chat message to the backend
- */
+// Async thunks
 export const sendChatMessage = createAsyncThunk(
   'chat/sendMessage',
   async ({ message, conversationId }, { rejectWithValue }) => {
     try {
-      // Get the JWT token from localStorage
-      const token = localStorage.getItem('token');
-      if (!token) {
-        return rejectWithValue('You need to be logged in to use the chat');
-      }
-      
-      // Get the user data for personalization
-      const userString = localStorage.getItem('user');
-      const userData = userString ? JSON.parse(userString) : {};
-      
-      // Call the chat API
-      const response = await axios.post('/api/v1/chatbot/message', {
-        message,
-        user_id: userData.id,
-        conversation_id: conversationId
-      }, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
-      
+      const response = await api.sendChatMessage(message, conversationId);
       return response.data;
     } catch (error) {
-      return rejectWithValue(
-        error.response?.data?.detail || 
-        error.message || 
-        'Failed to send message'
-      );
+      return rejectWithValue(error.response?.data || error.message);
     }
   }
 );
 
-/**
- * Async thunk to fetch conversation history
- */
-export const getChatHistory = createAsyncThunk(
-  'chat/getHistory',
+export const fetchConversationHistory = createAsyncThunk(
+  'chat/fetchHistory',
   async (conversationId, { rejectWithValue }) => {
     try {
-      // Get the JWT token from localStorage
-      const token = localStorage.getItem('token');
-      if (!token) {
-        return rejectWithValue('You need to be logged in to view chat history');
-      }
-      
-      // Call the history API
-      const response = await axios.get(`/api/v1/chatbot/history/${conversationId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
-      
-      return response.data;
+      const response = await api.getChatHistory(conversationId);
+      return {
+        messages: response.data,
+        conversation_id: conversationId
+      };
     } catch (error) {
-      return rejectWithValue(
-        error.response?.data?.detail || 
-        error.message || 
-        'Failed to fetch chat history'
-      );
+      return rejectWithValue(error.response?.data || error.message);
     }
   }
 );
 
-/**
- * Chat slice for Redux store
- */
-const chatSlice = createSlice({
+const initialState = {
+  messages: [],
+  isLoading: false,
+  conversationId: null,
+  suggestions: [],
+  error: null
+};
+
+export const chatSlice = createSlice({
   name: 'chat',
-  initialState: {
-    messages: [],
-    conversationId: null,
-    suggestions: [],
-    isLoading: false,
-    error: null
-  },
+  initialState,
   reducers: {
-    // Reset the chat state
     resetChat: (state) => {
       state.messages = [];
       state.conversationId = null;
       state.suggestions = [];
       state.error = null;
     },
-    
-    // Add a message locally (for offline functionality)
-    addLocalMessage: (state, action) => {
-      state.messages.push({
-        role: action.payload.role,
-        content: action.payload.content,
-        timestamp: new Date().toISOString()
-      });
+    clearError: (state) => {
+      state.error = null;
     }
   },
   extraReducers: (builder) => {
     builder
       // Handle sendChatMessage states
-      .addCase(sendChatMessage.pending, (state) => {
+      .addCase(sendChatMessage.pending, (state, action) => {
         state.isLoading = true;
         state.error = null;
         
-        // Optimistically add user message
+        // Add user message to the messages array immediately
         state.messages.push({
           role: 'user',
-          content: state.currentUserMessage,
+          content: action.meta.arg.message,
           timestamp: new Date().toISOString()
         });
       })
       .addCase(sendChatMessage.fulfilled, (state, action) => {
         state.isLoading = false;
+        state.conversationId = action.payload.conversation_id;
+        state.suggestions = action.payload.suggestions || [];
         
-        // Add the assistant's response
+        // Add assistant response to messages
         state.messages.push({
           role: 'assistant',
           content: action.payload.message,
           timestamp: new Date().toISOString()
         });
-        
-        // Update conversation ID if it's a new conversation
-        if (!state.conversationId) {
-          state.conversationId = action.payload.conversation_id;
-        }
-        
-        // Update suggestions
-        state.suggestions = action.payload.suggestions || [];
       })
       .addCase(sendChatMessage.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = action.payload;
+        state.error = action.payload || 'Failed to send message';
       })
-      
-      // Handle getChatHistory states
-      .addCase(getChatHistory.pending, (state) => {
+      .addCase(fetchConversationHistory.pending, (state) => {
         state.isLoading = true;
         state.error = null;
       })
-      .addCase(getChatHistory.fulfilled, (state, action) => {
+      .addCase(fetchConversationHistory.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.messages = action.payload;
+        state.messages = action.payload.messages || [];
+        state.conversationId = action.payload.conversation_id;
       })
-      .addCase(getChatHistory.rejected, (state, action) => {
+      .addCase(fetchConversationHistory.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = action.payload;
+        state.error = action.payload || 'Failed to fetch conversation history';
       });
   }
 });
 
-export const { resetChat, addLocalMessage } = chatSlice.actions;
+export const { resetChat, clearError } = chatSlice.actions;
 export default chatSlice.reducer;

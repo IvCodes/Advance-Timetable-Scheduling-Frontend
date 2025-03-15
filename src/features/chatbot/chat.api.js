@@ -1,77 +1,48 @@
 import axios from 'axios';
-import { createAsyncThunk } from '@reduxjs/toolkit';
 
 /**
  * API service for chat functionality
  * Provides methods for interacting with the chatbot backend
  */
 
-// Base URL for API requests
-const API_URL = import.meta.env.VITE_API_URL || '';
+// Base URL for API requests - hardcoded for local development
+const API_URL = 'http://localhost:8000';
 
 /**
  * Send a chat message to the backend
+ * @param {string} message - The message to send
+ * @param {string} conversationId - Optional conversation ID for continuing a conversation
+ * @returns {Promise} - Promise that resolves to the chat response
  */
-export const sendChatMessage = createAsyncThunk(
-  'chat/sendMessage',
-  async ({ message, conversationId }, { rejectWithValue }) => {
-    try {
-      // Get the JWT token from localStorage
-      const token = localStorage.getItem('token');
-      if (!token) {
-        return rejectWithValue('Authentication required. Please log in.');
-      }
-      
-      // Call the chat API
-      const response = await axios.post(`${API_URL}/api/v1/chatbot/message`, {
-        message,
-        conversation_id: conversationId
-      }, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
-      
-      return response.data;
-    } catch (error) {
-      console.error('Error sending chat message:', error);
-      return rejectWithValue(
-        error.response?.data?.detail || 
-        error.message || 
-        'Failed to send message. Please try again.'
-      );
-    }
+export const sendChatMessage = async (message, conversationId = null) => {
+  try {
+    // Call the chat API without requiring authentication
+    const response = await axios.post(`${API_URL}/api/v1/chatbot/message`, {
+      message,
+      conversation_id: conversationId,
+      user_id: localStorage.getItem('userId') || 'anonymous'
+    });
+    
+    return response;
+  } catch (error) {
+    console.error('Error sending chat message:', error);
+    throw error;
   }
-);
+};
 
 /**
  * Fetch conversation history
+ * @param {string} conversationId - The ID of the conversation to fetch
+ * @returns {Promise} - Promise that resolves to the conversation history
  */
-export const getChatHistory = createAsyncThunk(
-  'chat/getHistory',
-  async (conversationId, { rejectWithValue }) => {
-    try {
-      // Get the JWT token from localStorage
-      const token = localStorage.getItem('token');
-      if (!token) {
-        return rejectWithValue('Authentication required. Please log in.');
-      }
-      
-      // Call the history API
-      const response = await axios.get(`${API_URL}/api/v1/chatbot/history/${conversationId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
-      
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching chat history:', error);
-      return rejectWithValue(
-        error.response?.data?.detail || 
-        error.message || 
-        'Failed to fetch chat history. Please try again.'
-      );
-    }
+export const getChatHistory = async (conversationId) => {
+  try {
+    // Call the history API without requiring authentication
+    const response = await axios.get(`${API_URL}/api/v1/chatbot/history/${conversationId}`);
+    
+    return response;
+  } catch (error) {
+    console.error('Error fetching chat history:', error);
+    throw error;
   }
-);
+};
