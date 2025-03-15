@@ -14,6 +14,8 @@ import {
   llmResponse,
   getSelectedAlgorithm,
   selectAlgorithm,
+  publishTimetable,
+  getPublishedTimetable,
 } from "./timetable.api";
 
 const ViewTimetable = () => {
@@ -26,6 +28,8 @@ const ViewTimetable = () => {
   const dispatch = useDispatch();
   const algorithms = ["GA", "CO", "RL"];
   const [nlResponse, setNlResponse] = useState("");
+  const [publishLoading, setPublishLoading] = useState(false);
+  const [publishMessage, setPublishMessage] = useState(null);
 
   useEffect(() => {
     dispatch(getDays());
@@ -35,6 +39,7 @@ const ViewTimetable = () => {
     dispatch(getSpaces());
     dispatch(getTeachers());
     dispatch(getSelectedAlgorithm());
+    dispatch(getPublishedTimetable());
   }, [dispatch]);
 
   useEffect(() => {
@@ -48,12 +53,6 @@ const ViewTimetable = () => {
     };
     fetchllmresponse();
   }, [evaluation]);
-
-  // useEffect(() => {
-  //   if (llmResponse) {
-  //     setNlResponse(llmResponse);
-  //   }
-  // }, [llmResponse]);
 
   const generateColumns = (days) => [
     {
@@ -156,7 +155,38 @@ const ViewTimetable = () => {
                   )
                 </h2>
                 {selectedAlgorithm?.selected_algorithm === algorithm ? (
-                  <div className="text-green-500">Selected</div>
+                  <div className="flex items-center space-x-4">
+                    <div className="text-green-500 font-bold">Selected</div>
+                    <Button
+                      type="primary"
+                      loading={publishLoading && selectedAlgorithm?.selected_algorithm === algorithm}
+                      onClick={() => {
+                        setPublishLoading(true);
+                        setPublishMessage(null);
+                        dispatch(publishTimetable(algorithm))
+                          .unwrap()
+                          .then((result) => {
+                            setPublishMessage({
+                              type: "success",
+                              content: result.message || "Timetable published successfully!"
+                            });
+                            // Refresh data after publishing
+                            dispatch(getPublishedTimetable());
+                          })
+                          .catch((error) => {
+                            setPublishMessage({
+                              type: "error",
+                              content: error.message || "Failed to publish timetable"
+                            });
+                          })
+                          .finally(() => {
+                            setPublishLoading(false);
+                          });
+                      }}
+                    >
+                      Publish Timetable
+                    </Button>
+                  </div>
                 ) : (
                   <Button
                     type="default"
@@ -178,6 +208,11 @@ const ViewTimetable = () => {
                   },
                 }}
               >
+                {publishMessage && (
+                  <div className={`mb-4 p-3 rounded ${publishMessage.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                    {publishMessage.content}
+                  </div>
+                )}
                 <Tabs type="card">
                   {timetable?.map((semesterTimetable) => {
                     const semester = semesterTimetable.semester;

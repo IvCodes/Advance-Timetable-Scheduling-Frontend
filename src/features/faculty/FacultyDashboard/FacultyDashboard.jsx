@@ -38,15 +38,13 @@ import {
 } from '@ant-design/icons';
 import { useSelector, useDispatch } from "react-redux";
 import { 
-  getTimetable 
-} from "../../admin/Timetable/timetable.api";
-import { 
   getDays, 
   getPeriods, 
   getSubjects, 
   getSpaces, 
   getTeachers 
 } from "../../admin/DataManagement/data.api";
+import { getFacultyTimetable } from "../../admin/Timetable/timetable.api";
 import dayjs from 'dayjs';
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -268,34 +266,40 @@ const markDayAsAvailable = async (facultyId, date) => {
 
 // Function to get current active classes
 const getCurrentClasses = (timetable, facultyId, currentDay, currentPeriod) => {
-  if (!timetable || !timetable.length) return [];
+  if (!timetable || !timetable.semesters) {
+    return [];
+  }
   
-  const activeClasses = [];
+  const classes = [];
   
-  timetable.forEach(semesterData => {
-    semesterData.timetable
-      .filter(entry => 
-        entry.teacher === facultyId && 
-        entry.day.name.toLowerCase() === currentDay.toLowerCase() &&
-        entry.period.some(p => p.name === currentPeriod)
-      )
-      .forEach(entry => {
-        activeClasses.push({
-          semester: semesterData.semester,
-          subject: entry.subject,
-          room: entry.room.name,
-          duration: entry.duration
-        });
-      });
-  });
+  // Look through all semesters in the published timetable
+  for (const [semester, entries] of Object.entries(timetable.semesters)) {
+    // Find entries for current day and period that involve this faculty
+    const currentClasses = entries.filter(entry => {
+      const matchesDay = entry.day && entry.day.name.toLowerCase() === currentDay.toLowerCase();
+      const matchesPeriod = entry.period && 
+        Array.isArray(entry.period) ? 
+        entry.period.some(p => p.name.toLowerCase() === currentPeriod.toLowerCase()) : 
+        entry.period?.name.toLowerCase() === currentPeriod.toLowerCase();
+      
+      return matchesDay && matchesPeriod;
+    });
+    
+    if (currentClasses.length > 0) {
+      classes.push(...currentClasses.map(cls => ({
+        ...cls,
+        semester: semester
+      })));
+    }
+  }
   
-  return activeClasses;
+  return classes;
 };
 
 const FacultyDashboard = () => {
   const dispatch = useDispatch();
-  const { timetable, loading: timetableLoading } = useSelector((state) => state.timetable);
   const { days, periods, subjects, teachers, spaces } = useSelector((state) => state.data);
+  const { facultyTimetable, loading } = useSelector((state) => state.timetable);
   
   // Refs for scroll functionality
   const timetableRef = useRef(null);
@@ -306,7 +310,6 @@ const FacultyDashboard = () => {
   const [facultyId, setFacultyId] = useState(null);
   const [facultySubjects, setFacultySubjects] = useState([]);
   const [unavailableDays, setUnavailableDays] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [selectedDate, setSelectedDate] = useState(null);
   const [reason, setReason] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
@@ -434,7 +437,6 @@ const FacultyDashboard = () => {
 
   // Fetch the needed data on component mount
   useEffect(() => {
-    dispatch(getTimetable());
     dispatch(getDays());
     dispatch(getPeriods());
     dispatch(getSubjects());
@@ -449,10 +451,30 @@ const FacultyDashboard = () => {
         if (user && user.id) {
           setFacultyId(user.id);
           console.log("Set faculty ID from localStorage:", user.id);
+          
+          // Fetch faculty-specific published timetable
+          dispatch(getFacultyTimetable(user.id));
+        } else {
+          // Use a default faculty ID for demo purposes
+          const defaultFacultyId = "FA0000001";
+          setFacultyId(defaultFacultyId);
+          console.log("Using default faculty ID:", defaultFacultyId);
+          dispatch(getFacultyTimetable(defaultFacultyId));
         }
+      } else {
+        // Use a default faculty ID for demo purposes
+        const defaultFacultyId = "FA0000001";
+        setFacultyId(defaultFacultyId);
+        console.log("Using default faculty ID:", defaultFacultyId);
+        dispatch(getFacultyTimetable(defaultFacultyId));
       }
     } catch (error) {
       console.error("Error getting user data from localStorage:", error);
+      // Use a default faculty ID for demo purposes
+      const defaultFacultyId = "FA0000001";
+      setFacultyId(defaultFacultyId);
+      console.log("Using default faculty ID after error:", defaultFacultyId);
+      dispatch(getFacultyTimetable(defaultFacultyId));
     }
     
     // Fetch faculty's assigned subjects
@@ -521,11 +543,18 @@ const FacultyDashboard = () => {
     
     return () => clearInterval(timer);
   }, [dispatch]);
-  
+
+  // Log period structure when it's available
+  useEffect(() => {
+    if (periods && periods.length > 0) {
+      console.log("Period structure example:", periods[0]);
+      console.log("All periods:", periods);
+    }
+  }, [periods]);
+
   // Fetch unavailable days when facultyId is set
   useEffect(() => {
     const fetchUnavailableDays = async () => {
-      setIsLoading(true);
       try {
         const currentFacultyId = getCurrentFacultyId() || getCurrentAuthenticatedUser()?.id;
         
@@ -549,107 +578,210 @@ const FacultyDashboard = () => {
         console.error("Error fetching unavailable days:", error);
         message.error("Failed to load unavailable days");
         setUnavailableDays([]);
-      } finally {
-        setIsLoading(false);
       }
     };
     
     fetchUnavailableDays();
   }, []);
-  
+
   // Update active classes when currentDayName, currentPeriodName, or timetable changes
   useEffect(() => {
-    if (facultyId && currentDayName && currentPeriodName && timetable) {
-      const classes = getCurrentClasses(timetable, facultyId, currentDayName, currentPeriodName);
+    if (facultyId && currentDayName && currentPeriodName && facultyTimetable) {
+      const classes = getCurrentClasses(facultyTimetable, facultyId, currentDayName, currentPeriodName);
       setActiveClasses(classes);
     } else {
       setActiveClasses([]);
     }
-  }, [facultyId, currentDayName, currentPeriodName, timetable]);
-  
-  // Helper function to generate table columns for timetable
-  const generateColumns = (days) => [
-    {
-      title: "Periods",
-      dataIndex: "period",
-      key: "period",
-      width: 150,
-    },
-    ...days
-      .filter(day => {
-        // Only include weekdays (assuming day names or codes match)
-        const weekdays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
-        return weekdays.includes(day.name.toLowerCase());
-      })
-      .map((day) => ({
-        title: day.long_name,
-        dataIndex: day.name,
-        key: day.name,
-        render: (value) => {
-          if (value) {
-            const { title, subject, room, teacher, duration } = value;
-            const s = subjects?.find((s) => s.code === subject);
-            const r = spaces?.find((r) => r.name === room);
-            const t = teachers?.find((t) => t.id === teacher);
-            const content = (
-              <div>
-                <p><strong>Subject:</strong> {s?.long_name}</p>
-                <p><strong>Room:</strong> {r?.long_name} ({r?.code})</p>
-                <p><strong>Teacher:</strong> {t?.first_name} {t?.last_name}</p>
-                <p><strong>Duration:</strong> {duration} hours</p>
-              </div>
-            );
-            return (
-              <Popover content={content} title={`Details for ${day.long_name}`}>
-                <div className="text-center">{title}</div>
-              </Popover>
-            );
-          }
-          return <div className="text-center">-</div>;
-        },
-      })),
-  ];
+  }, [facultyId, currentDayName, currentPeriodName, facultyTimetable]);
 
-  // Helper function to generate dataSource for the table
-  const generateDataSource = (semesterTimetable, days, periods) => {
+  // Helper function to generate columns for the table
+  const generateColumns = (days) => {
     // Filter to only include weekdays
     const weekdayNames = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
     const weekdayDays = days.filter(day => 
       weekdayNames.includes(day.name.toLowerCase())
     );
     
-    return periods.map((period, periodIndex) => ({
-      key: periodIndex,
-      period: period.long_name,
-      ...weekdayDays.reduce((acc, day) => {
-        const activity = semesterTimetable.find(
-          (entry) =>
-            entry.day.name === day.name &&
-            entry.period.some((p) => p.name === period.name) &&
-            (entry.teacher === facultyId || facultySubjects.includes(entry.subject))
-        );
-        acc[day.name] = activity
-          ? {
-              title: `${activity.subject} (${activity.room.name})`,
-              subject: activity.subject,
-              room: activity.room.name,
-              teacher: activity.teacher,
-              duration: activity.duration,
-            }
-          : null;
-        return acc;
-      }, {}),
-    }));
+    // First column is for period names
+    const columns = [
+      {
+        title: 'Period',
+        dataIndex: 'period',
+        key: 'period',
+        width: '120px',
+        fixed: 'left',
+        render: (text) => (
+          <div className="whitespace-pre-line font-medium text-gray-700">
+            {text}
+          </div>
+        ),
+      },
+    ];
+    
+    // Add a column for each day
+    weekdayDays.forEach((day) => {
+      columns.push({
+        title: day.long_name || day.name,
+        dataIndex: day.name,
+        key: day.name,
+        width: '160px',
+        render: (record) => {
+          if (!record) {
+            return <div className="h-full w-full text-center text-gray-400">-</div>;
+          }
+          
+          return (
+            <div className="p-1 rounded bg-blue-50 border border-blue-100">
+              <div className="font-medium text-blue-800 mb-1">{record.subjectName}</div>
+              <div className="text-xs text-gray-600">Room: {record.room}</div>
+              {record.teacher && (
+                <div className="text-xs text-gray-600 truncate">
+                  Faculty: {record.teacher}
+                  {record.substitute && (
+                    <span className="text-amber-600"> (Substitute)</span>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        },
+      });
+    });
+    
+    return columns;
   };
 
-  // Function to get semester name in readable format  
+  // Helper function to generate dataSource for the table
+  const generateDataSource = (timetableEntries, days, periods) => {
+    // Make sure we have data to work with
+    if (!timetableEntries || !Array.isArray(timetableEntries) || !days || !periods) {
+      console.error("Missing required data for timetable generation:", { 
+        hasTimetable: !!timetableEntries && Array.isArray(timetableEntries), 
+        hasDays: !!days, 
+        hasPeriods: !!periods 
+      });
+      return [];
+    }
+    
+    console.log("Generating timetable with entries:", timetableEntries);
+    console.log("Available periods:", periods);
+    
+    // Filter to only include weekdays
+    const weekdayNames = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+    const weekdayDays = days.filter(day => 
+      weekdayNames.includes(day.name.toLowerCase())
+    );
+    
+    // Sort periods by start time
+    const sortedPeriods = [...(periods || [])].sort((a, b) => {
+      // Extract hours and minutes from period times
+      if (!a.start_time || !b.start_time) return 0;
+      
+      const [aHours, aMinutes] = a.start_time.split(':').map(Number);
+      const [bHours, bMinutes] = b.start_time.split(':').map(Number);
+      
+      // Compare hours first, then minutes if hours are equal
+      if (aHours !== bHours) {
+        return aHours - bHours;
+      }
+      return aMinutes - bMinutes;
+    });
+    
+    console.log("Sorted periods:", sortedPeriods.map(p => `${p.name}: ${p.long_name}`));
+    console.log("Weekday days:", weekdayDays.map(d => `${d.name}: ${d.long_name}`));
+    
+    if (sortedPeriods.length === 0) {
+      console.warn("No periods available to generate timetable!");
+      return [];
+    }
+    
+    return sortedPeriods.map((period, periodIndex) => {
+      const rowData = {
+        key: periodIndex,
+        period: `${period.long_name || period.name}\n${period.start_time || ''} - ${period.end_time || ''}`,
+      };
+      
+      // Add a column for each day
+      weekdayDays.forEach(day => {
+        // Find activity for this cell
+        const activity = timetableEntries.find(entry => {
+          // Check if day matches (case insensitive)
+          const dayMatch = 
+            entry.day &&
+            (entry.day.name?.toLowerCase() === day.name?.toLowerCase() || 
+             entry.day.long_name?.toLowerCase() === day.long_name?.toLowerCase());
+          
+          if (!dayMatch) return false;
+          
+          // Check if period matches
+          let periodMatch = false;
+          
+          if (entry.period) {
+            if (Array.isArray(entry.period)) {
+              // Check each period in the array
+              periodMatch = entry.period.some(p => 
+                p.name?.toLowerCase() === period.name?.toLowerCase() ||
+                p.long_name?.toLowerCase().includes(period.long_name?.toLowerCase())
+              );
+            } else {
+              // Single period object
+              periodMatch = 
+                entry.period.name?.toLowerCase() === period.name?.toLowerCase() ||
+                entry.period.long_name?.toLowerCase().includes(period.long_name?.toLowerCase());
+            }
+          }
+          
+          if (dayMatch && periodMatch) {
+            console.log(`Found match: Day=${day.name}, Period=${period.name}, Subject=${entry.subject}`);
+          }
+          
+          return dayMatch && periodMatch;
+        });
+        
+        // If we found an activity for this day/period
+        if (activity) {
+          // Find the teacher name from the teachers array
+          const teacherDetails = teachers?.find(t => t.id === activity.teacher);
+          const teacherName = teacherDetails 
+            ? `${teacherDetails.first_name} ${teacherDetails.last_name}` 
+            : activity.teacher;
+          
+          // Find the subject details from the subjects array
+          const subjectDetails = subjects?.find(s => s.code === activity.subject);
+          const subjectName = subjectDetails?.name || activity.subject;
+          
+          // Find the room details from the spaces array
+          const roomDetails = spaces?.find(s => s.name === activity.room?.name);
+          const roomName = roomDetails?.long_name || roomDetails?.name || activity.room?.name || 'Unknown Room';
+          
+          rowData[day.name] = {
+            title: `${subjectName} (${roomName})`,
+            subject: activity.subject,
+            subjectName: subjectName,
+            room: roomName,
+            teacher: teacherName,
+            original_teacher: activity.original_teacher,
+            substitute: activity.substitute,
+            duration: activity.duration,
+            activity: activity
+          };
+        } else {
+          rowData[day.name] = null;
+        }
+      });
+      
+      return rowData;
+    });
+  };
+
+  // Helper function to get semester name in readable format  
   const getSemName = (semester) => {
     const year = parseInt(semester.substring(3, 4));
     const sem = parseInt(semester.substring(4, 6));
     return { year, sem };
   };
   
-  // Function to create a simple status dataset for calendar rendering
+  // Helper function to create a simple status dataset for calendar rendering
   const getUnavailabilityStatusMap = () => {
     const statusMap = {};
     
@@ -851,6 +983,80 @@ const FacultyDashboard = () => {
     }
   };
 
+  // Function to render published timetable data
+  const renderPublishedTimetable = (publishedTimetable) => {
+    if (!publishedTimetable || !publishedTimetable.semesters) {
+      console.log("No published timetable data available:", publishedTimetable);
+      return [{
+        label: "No Published Timetable",
+        key: "no-timetable",
+        children: (
+          <Alert
+            type="info"
+            message="There is no published timetable available yet. Please check back later."
+          />
+        )
+      }];
+    }
+    
+    console.log("Rendering published timetable:", publishedTimetable);
+    
+    // Convert published timetable format to tabs
+    return Object.entries(publishedTimetable.semesters).map(([semesterKey, semesterData]) => {
+      const columns = generateColumns(days);
+      
+      // Validate timetable entries
+      if (!Array.isArray(semesterData) || semesterData.length === 0) {
+        return {
+          label: `Year ${getSemName(semesterKey).year} Semester ${getSemName(semesterKey).sem}`,
+          key: `${semesterKey}_${Math.random().toString(36).substring(2, 7)}`,
+          children: (
+            <Alert
+              type="info"
+              message={`No classes assigned to you in ${semesterData.long_name || semesterKey}`}
+            />
+          )
+        };
+      }
+      
+      const dataSource = generateDataSource(
+        semesterData,
+        days,
+        periods
+      );
+
+      console.log(`Generated dataSource for ${semesterKey} with ${dataSource.length} rows`);
+      
+      return {
+        label: `Year ${getSemName(semesterKey).year} Semester ${getSemName(semesterKey).sem}`,
+        key: `${semesterKey}_${Math.random().toString(36).substring(2, 7)}`,
+        children: (
+          <ConfigProvider
+            theme={{
+              components: {
+                Table: {
+                  colorBgContainer: "transparent",
+                  colorText: "rgba(0,0,0,0.88)",
+                  headerColor: "rgba(0,0,0,0.88)",
+                  borderColor: "#d9d9d9",
+                },
+              },
+            }}
+          >
+            <Table
+              columns={columns}
+              dataSource={dataSource}
+              pagination={false}
+              bordered
+              size="middle"
+              className="timetable-table"
+            />
+          </ConfigProvider>
+        ),
+      };
+    });
+  };
+
   return (
     <div>
       <div className="flex flex-grow overflow-hidden">
@@ -953,66 +1159,102 @@ const FacultyDashboard = () => {
             title="My Teaching Schedule" 
             className="mb-6"
             ref={timetableRef}
-            id="timetable"
           >
-            {isLoading ? (
+            {loading ? (
               <div className="flex justify-center items-center h-64">
                 <Spin size="large" />
               </div>
-            ) : timetable && timetable.length > 0 ? (
+            ) : !facultyTimetable || !facultyTimetable.semesters ? (
+              <Empty description="No published timetable available yet" />
+            ) : (
               <ConfigProvider
                 theme={{
                   components: {
                     Tabs: {
-                      itemColor: "#fff",
-                    }
-                  }
+                      cardBg: "#f0f2f5",
+                    },
+                  },
                 }}
               >
-                <Tabs
-                  type="card"
-                  items={timetable.map((semesterTimetable) => {
-                    const semester = semesterTimetable.semester;
-                    const columns = generateColumns(days);
-                    const dataSource = generateDataSource(
-                      semesterTimetable.timetable,
-                      days,
-                      periods
-                    );
-
-                    return {
-                      label: `Year ${getSemName(semester).year} Semester ${getSemName(semester).sem}`,
-                      key: `${semester}_${semesterTimetable._id || Math.random().toString(36).substring(2, 7)}`,
-                      children: (
-                        <ConfigProvider
-                          theme={{
-                            components: {
-                              Table: {
-                                colorBgContainer: "transparent",
-                                colorText: "rgba(0,0,0,0.88)",
-                                headerColor: "rgba(0,0,0,0.88)",
-                                borderColor: "#d9d9d9",
-                                headerBg: "#f5f5f5",
-                              }
-                            }
-                          }}
-                        >
+                <div>
+                  <p className="mb-4">
+                    <Text strong>Current Faculty ID:</Text> {facultyId}
+                  </p>
+                  
+                  <Tabs defaultActiveKey="all" className="custom-tabs">
+                    <Tabs.TabPane tab="All Semesters" key="all">
+                      {Object.keys(facultyTimetable.semesters).length === 0 ? (
+                        <Empty description="No classes assigned to you in any semester" />
+                      ) : (
+                        <div>
+                          {Object.entries(facultyTimetable.semesters).map(([semesterKey, semesterData]) => (
+                            <div key={semesterKey} className="mb-8">
+                              <Title level={4} className="mb-4">
+                                {semesterData.long_name || semesterKey}
+                              </Title>
+                              
+                              {Array.isArray(semesterData) && semesterData.length > 0 ? (
+                                <Table
+                                  columns={generateColumns(days)}
+                                  dataSource={generateDataSource(
+                                    semesterData,
+                                    days,
+                                    periods
+                                  )}
+                                  pagination={false}
+                                  bordered
+                                  size="middle"
+                                  className="custom-timetable"
+                                />
+                              ) : (
+                                <Empty description={`No classes assigned to you in ${semesterData.long_name || semesterKey}`} />
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </Tabs.TabPane>
+                    
+                    {Object.entries(facultyTimetable.semesters).map(([semesterKey, semesterData]) => (
+                      <Tabs.TabPane 
+                        tab={semesterData.long_name || semesterKey} 
+                        key={semesterKey}
+                      >
+                        {!Array.isArray(semesterData) || semesterData.length === 0 ? (
+                          <Empty description={`No classes assigned to you in ${semesterData.long_name || semesterKey}`} />
+                        ) : (
                           <Table
-                            columns={columns}
-                            dataSource={dataSource}
+                            columns={generateColumns(days)}
+                            dataSource={generateDataSource(
+                              semesterData,
+                              days,
+                              periods
+                            )}
                             pagination={false}
                             bordered
                             size="middle"
                             className="custom-timetable"
                           />
-                        </ConfigProvider>
-                      ),
-                    };
-                  })}
-                />
+                        )}
+                      </Tabs.TabPane>
+                    ))}
+                  </Tabs>
+                  
+                  {/* Debug Info */}
+                  {import.meta.env.DEV && (
+                    <div className="mt-4 p-4 bg-gray-100 rounded">
+                      <Text strong>Debug Info:</Text>
+                      <pre className="text-xs mt-2">
+                        Has timetable: {facultyTimetable ? "Yes" : "No"}{"\n"}
+                        Has semesters: {facultyTimetable?.semesters ? `Yes (${Object.keys(facultyTimetable.semesters).length})` : "No"}{"\n"}
+                        FacultyId: {facultyId}{"\n"}
+                        Days: {days?.length || 0}{"\n"}
+                        Periods: {periods?.length || 0}
+                      </pre>
+                    </div>
+                  )}
+                </div>
               </ConfigProvider>
-            ) : (
-              <Empty description="No teaching schedule available" />
             )}
           </Card>
           
@@ -1021,7 +1263,6 @@ const FacultyDashboard = () => {
             title="Manage Availability" 
             className="mb-6"
             ref={availabilityRef}
-            id="availability"
           >
             <div className="mb-4">
               <Paragraph>
