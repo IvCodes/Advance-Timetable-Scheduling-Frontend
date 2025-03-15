@@ -15,6 +15,7 @@ const EditTimetableModal = ({
     (state) => state.data
   );
   const [loading, setLoading] = useState(false);
+  const [filteredTeachers, setFilteredTeachers] = useState([]);
 
   useEffect(() => {
     if (visible && initialData) {
@@ -34,8 +35,57 @@ const EditTimetableModal = ({
         period: initialData.period, // Array of period names
         duration: initialData.duration,
       });
+
+      // Initialize filtered teachers based on the selected subject
+      const selectedSubject = initialData.subject;
+      filterTeachersBySubject(selectedSubject);
     }
-  }, [visible, initialData, form]);
+  }, [visible, initialData, form, teachers]);
+
+  // Function to filter teachers by subject
+  const filterTeachersBySubject = (subjectCode) => {
+    if (!subjectCode || !teachers) {
+      setFilteredTeachers([]);
+      return;
+    }
+
+    const filtered = teachers.filter(
+      (teacher) => teacher.subjects && teacher.subjects.includes(subjectCode)
+    );
+    setFilteredTeachers(filtered);
+  };
+
+  // Handle subject change
+  const handleSubjectChange = (value) => {
+    filterTeachersBySubject(value);
+    // Clear teacher selection if current teacher doesn't teach the new subject
+    const currentTeacher = form.getFieldValue("teacher");
+    const teacherStillValid = filteredTeachers.some(
+      (t) => t.id === currentTeacher
+    );
+
+    if (!teacherStillValid) {
+      form.setFieldsValue({ teacher: undefined });
+    }
+  };
+
+  // Validate that the number of periods matches the duration
+  const validatePeriods = (_, value) => {
+    const duration = form.getFieldValue("duration");
+    if (!value || !duration) {
+      return Promise.resolve();
+    }
+
+    if (value.length !== duration) {
+      return Promise.reject(
+        new Error(
+          `Please select exactly ${duration} periods to match the duration`
+        )
+      );
+    }
+
+    return Promise.resolve();
+  };
 
   const handleSubmit = async () => {
     try {
@@ -101,7 +151,16 @@ const EditTimetableModal = ({
           label="Subgroups"
           rules={[{ required: true }]}
         >
-          <Select mode="multiple" placeholder="Select subgroups" disabled>
+          <Select
+            mode="multiple"
+            placeholder="Select subgroups"
+            disabled
+            showSearch
+            optionFilterProp="children"
+            filterOption={(input, option) =>
+              option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
+            }
+          >
             {[
               "SEM101",
               "SEM102",
@@ -120,7 +179,15 @@ const EditTimetableModal = ({
         </Form.Item>
 
         <Form.Item name="subject" label="Subject" rules={[{ required: true }]}>
-          <Select>
+          <Select
+            disabled
+            showSearch
+            optionFilterProp="children"
+            onChange={handleSubjectChange}
+            filterOption={(input, option) =>
+              option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
+            }
+          >
             {subjects?.map((subject) => (
               <Select.Option key={subject.code} value={subject.code}>
                 {subject.long_name}
@@ -130,8 +197,14 @@ const EditTimetableModal = ({
         </Form.Item>
 
         <Form.Item name="teacher" label="Teacher" rules={[{ required: true }]}>
-          <Select>
-            {teachers?.map((teacher) => (
+          <Select
+            showSearch
+            optionFilterProp="children"
+            filterOption={(input, option) =>
+              option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
+            }
+          >
+            {filteredTeachers.map((teacher) => (
               <Select.Option key={teacher.id} value={teacher.id}>
                 {`${teacher.first_name} ${teacher.last_name}`}
               </Select.Option>
@@ -140,7 +213,13 @@ const EditTimetableModal = ({
         </Form.Item>
 
         <Form.Item name="room" label="Room" rules={[{ required: true }]}>
-          <Select>
+          <Select
+            showSearch
+            optionFilterProp="children"
+            filterOption={(input, option) =>
+              option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
+            }
+          >
             {spaces?.map((room) => (
               <Select.Option key={room.name} value={room.name}>
                 {`${room.long_name} (${room.code})`}
@@ -150,7 +229,13 @@ const EditTimetableModal = ({
         </Form.Item>
 
         <Form.Item name="day" label="Day" rules={[{ required: true }]}>
-          <Select>
+          <Select
+            showSearch
+            optionFilterProp="children"
+            filterOption={(input, option) =>
+              option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
+            }
+          >
             {days?.map((day) => (
               <Select.Option key={day.name} value={day.name}>
                 {day.long_name}
@@ -159,8 +244,23 @@ const EditTimetableModal = ({
           </Select>
         </Form.Item>
 
-        <Form.Item name="period" label="Periods" rules={[{ required: true }]}>
-          <Select mode="multiple">
+        <Form.Item
+          name="period"
+          label="Periods"
+          rules={[
+            { required: true, message: "Please select periods" },
+            { validator: validatePeriods },
+          ]}
+        >
+          <Select
+            mode="multiple"
+            placeholder="Select time periods"
+            showSearch
+            optionFilterProp="children"
+            filterOption={(input, option) =>
+              option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
+            }
+          >
             {periods?.map((period) => (
               <Select.Option key={period.name} value={period.name}>
                 {period.long_name}
