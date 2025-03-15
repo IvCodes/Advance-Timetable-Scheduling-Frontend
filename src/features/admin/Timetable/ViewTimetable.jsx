@@ -24,6 +24,7 @@ import {
   editTimetable,
 } from "./timetable.api";
 import EditTimetableModal from "./EditTimetable";
+import ConflictDetailsModal from "./ConflictDetailsModal";
 
 const ViewTimetable = () => {
   const { days, periods, subjects, teachers, spaces } = useSelector(
@@ -42,6 +43,8 @@ const ViewTimetable = () => {
   const [selectedActivity, setSelectedActivity] = useState(null);
   const [selectedTimetableId, setSelectedTimetableId] = useState(null);
   const [selectedAlgorithm, setSelectedAlgorithm] = useState(null);
+  const [conflicts, setConflicts] = useState([]);
+  const [conflictModalVisible, setConflictModalVisible] = useState(false);
 
   // Define the standard order of days (Monday to Friday)
   const dayOrder = {
@@ -119,12 +122,6 @@ const ViewTimetable = () => {
   const generateColumns = (days, timetableId, algorithm) => {
     // Sort days using the custom sort function to ensure Monday to Friday order
     const sortedDays = sortDays(days);
-
-    // Debug log to verify day order
-    console.log(
-      "Sorted days for columns:",
-      sortedDays.map((d) => d.name)
-    );
 
     return [
       {
@@ -317,7 +314,6 @@ const ViewTimetable = () => {
       // The updatedActivity is already in the correct format from the EditTimetableModal
       console.log("updatedActivity", updatedActivity);
 
-      // No need to create a new object, just use the updatedActivity directly
       const response = await dispatch(
         editTimetable({
           timetableId: selectedTimetableId,
@@ -328,30 +324,85 @@ const ViewTimetable = () => {
 
       console.log(response);
 
-      if (response.detail) {
-        const conflictDescription = response.detail.match(
-          /description': "(.*?)"/
-        )[1];
-        message.error("Conflicts detected: " + conflictDescription);
+      if (
+        response.message === "Conflicts detected. Changes were not saved." &&
+        response.conflicts
+      ) {
+        setConflicts(response.conflicts);
+        setConflictModalVisible(true);
+      } else if (response.detail) {
+        try {
+          // Try to parse conflicts from detail string if they're embedded
+          const detailObject =
+            typeof response.detail === "string"
+              ? JSON.parse(response.detail.replace(/'/g, '"'))
+              : response.detail;
+
+          if (detailObject.conflicts) {
+            setConflicts(detailObject.conflicts);
+            setConflictModalVisible(true);
+          } else {
+            const conflictDescription =
+              response.detail.match(/description': "(.*?)"/)?.[1] ||
+              "Unknown conflict";
+            message.error("Conflicts detected: " + conflictDescription);
+          }
+        } catch (e) {
+          // Fallback to original behavior
+          const conflictDescription =
+            response.detail.match(/description': "(.*?)"/)?.[1] ||
+            "Unknown conflict";
+          message.error("Conflicts detected: " + conflictDescription);
+        }
       } else {
         message.success("Timetable updated successfully");
         setEditModalVisible(false);
         dispatch(getTimetable());
       }
     } catch (error) {
-      if (error.detail) {
-        const conflictDescription = error.detail.match(
-          /description': "(.*?)"/
-        )[1];
-        message.error("Failed to update timetable: " + conflictDescription);
+      if (
+        error.message === "Conflicts detected. Changes were not saved." &&
+        error.conflicts
+      ) {
+        setConflicts(error.conflicts);
+        setConflictModalVisible(true);
+      } else if (error.detail) {
+        try {
+          // Try to parse conflicts from detail string if they're embedded
+          const detailObject =
+            typeof error.detail === "string"
+              ? JSON.parse(error.detail.replace(/'/g, '"'))
+              : error.detail;
+
+          if (detailObject.conflicts) {
+            setConflicts(detailObject.conflicts);
+            setConflictModalVisible(true);
+          } else {
+            const conflictDescription =
+              error.detail.match(/description': "(.*?)"/)?.[1] ||
+              "Unknown error";
+            message.error("Failed to update timetable: " + conflictDescription);
+          }
+        } catch (e) {
+          // Fallback to original behavior
+          const conflictDescription =
+            error.detail.match(/description': "(.*?)"/)?.[1] || "Unknown error";
+          message.error("Failed to update timetable: " + conflictDescription);
+        }
       } else {
-        message.error("Failed to update timetable: " + error.message);
+        message.error(
+          "Failed to update timetable: " + (error.message || "Unknown error")
+        );
       }
     }
   };
 
   const handleEditCancel = () => {
     setEditModalVisible(false);
+  };
+
+  const handleConflictModalClose = () => {
+    setConflictModalVisible(false);
   };
 
   return (
@@ -492,6 +543,12 @@ const ViewTimetable = () => {
         initialData={selectedActivity}
         timetableId={selectedTimetableId}
         algorithm={selectedAlgorithm}
+      />
+
+      <ConflictDetailsModal
+        visible={conflictModalVisible}
+        onClose={handleConflictModalClose}
+        conflicts={conflicts}
       />
     </div>
   );
