@@ -207,3 +207,21 @@ export const setNotificationRead = createAsyncThunk(
     return response.data;
   }
 );
+
+export const editTimetable = createAsyncThunk(
+  "timetable/edit",
+  async ({ timetableId, timetableData, sessionId }, { rejectWithValue }) => {
+    try {
+      const response = await api.patch(
+        `/timetable/timetable/${timetableId}/activity/${sessionId}`,
+        timetableData
+      );
+      return response.data;
+    } catch (error) {
+      if (error.response && error.response.data) {
+        return rejectWithValue(error.response.data);
+      }
+      throw error;
+    }
+  }
+);
