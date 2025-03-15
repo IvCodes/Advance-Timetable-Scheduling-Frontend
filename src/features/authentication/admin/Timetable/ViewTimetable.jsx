@@ -142,65 +142,101 @@ const ViewTimetable = () => {
             return (
               <Popover
                 content={
-                  <div>
-                    {value.map((activity, index) => {
-                      const subject = subjects?.find(
-                        (s) => s.code === activity.subject
-                      );
-                      const room = spaces?.find(
-                        (r) => r.name === activity.room.name
-                      );
-                      const teacher = teachers?.find(
-                        (t) => t.id === activity.teacher
-                      );
+                  <div
+                    className="activity-popover-content"
+                    style={{
+                      maxHeight: "400px",
+                      overflowY: "auto",
+                      width: value.length > 1 ? "500px" : "300px",
+                      padding: "10px",
+                    }}
+                  >
+                    <div
+                      className={value.length > 1 ? "activity-grid" : ""}
+                      style={{
+                        display: value.length > 1 ? "grid" : "block",
+                        gridTemplateColumns:
+                          value.length > 3 ? "1fr 1fr" : "1fr",
+                        gap: "15px",
+                      }}
+                    >
+                      {value.map((activity, index) => {
+                        const subject = subjects?.find(
+                          (s) => s.code === activity.subject
+                        );
+                        const room = spaces?.find(
+                          (r) => r.name === activity.room.name
+                        );
+                        const teacher = teachers?.find(
+                          (t) => t.id === activity.teacher
+                        );
 
-                      return (
-                        <div
-                          key={index}
-                          onClick={() => {
-                            handleCellClick(
-                              {
-                                ...activity,
-                                subject: subject?.code,
-                                subject_name: subject?.long_name,
-                                room: {
-                                  _id: room?._id,
-                                  name: room?.name,
-                                  code: room?.code,
-                                  long_name: room?.long_name,
+                        return (
+                          <div
+                            key={index}
+                            onClick={() => {
+                              handleCellClick(
+                                {
+                                  ...activity,
+                                  subject: subject?.code,
+                                  subject_name: subject?.long_name,
+                                  room: {
+                                    _id: room?._id,
+                                    name: room?.name,
+                                    code: room?.code,
+                                    long_name: room?.long_name,
+                                  },
+                                  teacher: {
+                                    id: teacher?.id,
+                                    first_name: teacher?.first_name,
+                                    last_name: teacher?.last_name,
+                                    position: teacher?.position,
+                                  },
                                 },
-                                teacher: {
-                                  id: teacher?.id,
-                                  first_name: teacher?.first_name,
-                                  last_name: teacher?.last_name,
-                                  position: teacher?.position,
-                                },
-                              },
-                              day.name,
-                              algorithm,
-                              timetableId
-                            );
-                          }}
-                          style={{ cursor: "pointer", marginBottom: "10px" }}
-                        >
-                          <p>
-                            <strong>{activity.title}</strong>
-                          </p>
-                          <p>Subject: {subject?.long_name}</p>
-                          <p>
-                            Room: {room?.long_name} ({room?.code})
-                          </p>
-                          <p>
-                            Teacher: {teacher?.first_name} {teacher?.last_name}{" "}
-                            ({teacher?.position})
-                          </p>
-                          <p>Duration: {activity.duration} hours</p>
-                        </div>
-                      );
-                    })}
+                                day.name,
+                                algorithm,
+                                timetableId
+                              );
+                            }}
+                            style={{
+                              cursor: "pointer",
+                              marginBottom: "10px",
+                              padding: "10px",
+                              border: "1px solid #f0f0f0",
+                              borderRadius: "5px",
+                              backgroundColor: "#f9f9f9",
+                            }}
+                          >
+                            <p
+                              style={{
+                                fontWeight: "bold",
+                                marginBottom: "5px",
+                              }}
+                            >
+                              {activity.title}
+                            </p>
+                            <p style={{ margin: "3px 0" }}>
+                              Subject: {subject?.long_name}
+                            </p>
+                            <p style={{ margin: "3px 0" }}>
+                              Room: {room?.long_name} ({room?.code})
+                            </p>
+                            <p style={{ margin: "3px 0" }}>
+                              Teacher: {teacher?.first_name}{" "}
+                              {teacher?.last_name} ({teacher?.position})
+                            </p>
+                            <p style={{ margin: "3px 0" }}>
+                              Duration: {activity.duration} hours
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 }
                 title={`Details for ${day.long_name}`}
+                placement="right"
+                overlayStyle={{ maxWidth: "800px" }}
               >
                 <div className="text-center" style={{ cursor: "pointer" }}>
                   {value.map((activity, index) => (
