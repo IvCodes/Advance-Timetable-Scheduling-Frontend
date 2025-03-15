@@ -1,0 +1,19 @@
+.chat-suggestion {
+  font-size: 12px;
+  border-radius: 16px;
+  background-color: #f0f2f5;
+  border: none;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  max-width: 200px;
+  overflow: hidden;
+  margin-right: 4px;
+  margin-bottom: 4px;
+  transition: all 0.3s;
+}
+
+.chat-suggestion:hover {
+  background-color: #e6f7ff;
+  border-color: #1890ff;
+  color: #1890ff;
+}

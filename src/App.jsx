@@ -1,6 +1,7 @@
 import { useState } from "react";
 import Loader from "./components/loader/loader";
 import Home from "./pages/Home";
+import { ChatContainer } from "./features/chatbot";
 
 import { useEffect } from "react";
 import { restoreUser } from "./features/authentication/auth.slice";
@@ -19,7 +20,12 @@ function App() {
     }
   }, [dispatch]);
 
-  return <>{loading ? <Loader /> : <Home />}</>;
+  return (
+    <>
+      {loading ? <Loader /> : <Home />}
+      <ChatContainer />
+    </>
+  );
 }
 
 export default App;

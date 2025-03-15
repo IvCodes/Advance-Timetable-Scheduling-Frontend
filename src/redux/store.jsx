@@ -5,6 +5,7 @@ import usersReducer from "../features/admin/UserManagement/users.slice";
 import dataReducer from "../features/admin/DataManagement/data.slice";
 import sidebarReducer from "../components/sidebar/sidebar.slice";
 import timetableReducer from "../features/admin/Timetable/timetable.slice";
+import { chatReducer } from "../features/chatbot";
 
 const store = configureStore({
   reducer: {
@@ -13,6 +14,7 @@ const store = configureStore({
     data: dataReducer,
     sidebar: sidebarReducer,
     timetable: timetableReducer,
+    chat: chatReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({ serializableCheck: false }).concat(logger),
