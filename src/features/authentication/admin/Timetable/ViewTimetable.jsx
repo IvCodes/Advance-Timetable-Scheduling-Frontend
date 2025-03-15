@@ -43,6 +43,59 @@ const ViewTimetable = () => {
   const [selectedTimetableId, setSelectedTimetableId] = useState(null);
   const [selectedAlgorithm, setSelectedAlgorithm] = useState(null);
 
+  // Define the standard order of days (Monday to Friday)
+  const dayOrder = {
+    monday: 1,
+    tuesday: 2,
+    wednesday: 3,
+    thursday: 4,
+    friday: 5,
+    saturday: 6,
+    sunday: 7,
+  };
+
+  // Sort days by standard weekday order
+  const sortDays = (days) => {
+    return [...days].sort((a, b) => {
+      // Try to match exact name or part of the name for case insensitivity
+      const dayA = a.name.toLowerCase();
+      const dayB = b.name.toLowerCase();
+
+      // Check for day names in different formats (could be "mon", "monday", etc.)
+      let orderA = 100; // Default high value if not found
+      let orderB = 100;
+
+      // Try to match common day prefixes
+      Object.keys(dayOrder).forEach((day) => {
+        if (dayA.includes(day.substring(0, 3))) orderA = dayOrder[day];
+        if (dayB.includes(day.substring(0, 3))) orderB = dayOrder[day];
+      });
+
+      return orderA - orderB;
+    });
+  };
+
+  // Sort periods numerically or alphabetically
+  const sortPeriods = (periods) => {
+    return [...periods].sort((a, b) => {
+      // If periods have numeric names like "1", "2", etc.
+      const numA = parseInt(a.name);
+      const numB = parseInt(b.name);
+
+      if (!isNaN(numA) && !isNaN(numB)) {
+        return numA - numB;
+      }
+
+      // If periods have order property
+      if (a.order !== undefined && b.order !== undefined) {
+        return a.order - b.order;
+      }
+
+      // Default to alphabetical sort
+      return a.name.localeCompare(b.name);
+    });
+  };
+
   useEffect(() => {
     dispatch(getDays());
     dispatch(getPeriods());
@@ -63,98 +116,115 @@ const ViewTimetable = () => {
     fetchllmresponse();
   }, [evaluation]);
 
-  const generateColumns = (days, timetableId, algorithm) => [
-    {
-      title: "Periods",
-      dataIndex: "period",
-      key: "period",
-      width: 150,
-    },
-    ...days.map((day) => ({
-      title: day.long_name,
-      dataIndex: day.name,
-      key: day.name,
-      render: (value) => {
-        if (value && value.length > 0) {
-          return (
-            <Popover
-              content={
-                <div>
-                  {value.map((activity, index) => {
-                    const subject = subjects?.find(
-                      (s) => s.code === activity.subject
-                    );
-                    const room = spaces?.find(
-                      (r) => r.name === activity.room.name
-                    );
-                    const teacher = teachers?.find(
-                      (t) => t.id === activity.teacher
-                    );
+  const generateColumns = (days, timetableId, algorithm) => {
+    // Sort days using the custom sort function to ensure Monday to Friday order
+    const sortedDays = sortDays(days);
 
-                    return (
-                      <div
-                        key={index}
-                        onClick={() => {
-                          handleCellClick(
-                            {
-                              ...activity,
-                              subject: subject?.code,
-                              subject_name: subject?.long_name,
-                              room: {
-                                _id: room?._id,
-                                name: room?.name,
-                                code: room?.code,
-                                long_name: room?.long_name,
-                              },
-                              teacher: {
-                                id: teacher?.id,
-                                first_name: teacher?.first_name,
-                                last_name: teacher?.last_name,
-                              },
-                            },
-                            day.name,
-                            algorithm,
-                            timetableId
-                          );
-                        }}
-                        style={{ cursor: "pointer", marginBottom: "10px" }}
-                      >
-                        <p>
-                          <strong>{activity.title}</strong>
-                        </p>
-                        <p>Subject: {subject?.long_name}</p>
-                        <p>
-                          Room: {room?.long_name} ({room?.code})
-                        </p>
-                        <p>
-                          Teacher: {teacher?.first_name} {teacher?.last_name}
-                        </p>
-                        <p>Duration: {activity.duration} hours</p>
-                      </div>
-                    );
-                  })}
-                </div>
-              }
-              title={`Details for ${day.long_name}`}
-            >
-              <div className="text-center" style={{ cursor: "pointer" }}>
-                {value.map((activity, index) => (
-                  <div key={index}>{activity.title}</div>
-                ))}
-              </div>
-            </Popover>
-          );
-        }
-        return <div className="text-center">-</div>;
+    // Debug log to verify day order
+    console.log(
+      "Sorted days for columns:",
+      sortedDays.map((d) => d.name)
+    );
+
+    return [
+      {
+        title: "Periods",
+        dataIndex: "period",
+        key: "period",
+        width: 150,
       },
-    })),
-  ];
+      ...sortedDays.map((day) => ({
+        title: day.long_name,
+        dataIndex: day.name,
+        key: day.name,
+        render: (value) => {
+          if (value && value.length > 0) {
+            return (
+              <Popover
+                content={
+                  <div>
+                    {value.map((activity, index) => {
+                      const subject = subjects?.find(
+                        (s) => s.code === activity.subject
+                      );
+                      const room = spaces?.find(
+                        (r) => r.name === activity.room.name
+                      );
+                      const teacher = teachers?.find(
+                        (t) => t.id === activity.teacher
+                      );
+
+                      return (
+                        <div
+                          key={index}
+                          onClick={() => {
+                            handleCellClick(
+                              {
+                                ...activity,
+                                subject: subject?.code,
+                                subject_name: subject?.long_name,
+                                room: {
+                                  _id: room?._id,
+                                  name: room?.name,
+                                  code: room?.code,
+                                  long_name: room?.long_name,
+                                },
+                                teacher: {
+                                  id: teacher?.id,
+                                  first_name: teacher?.first_name,
+                                  last_name: teacher?.last_name,
+                                  position: teacher?.position,
+                                },
+                              },
+                              day.name,
+                              algorithm,
+                              timetableId
+                            );
+                          }}
+                          style={{ cursor: "pointer", marginBottom: "10px" }}
+                        >
+                          <p>
+                            <strong>{activity.title}</strong>
+                          </p>
+                          <p>Subject: {subject?.long_name}</p>
+                          <p>
+                            Room: {room?.long_name} ({room?.code})
+                          </p>
+                          <p>
+                            Teacher: {teacher?.first_name} {teacher?.last_name}{" "}
+                            ({teacher?.position})
+                          </p>
+                          <p>Duration: {activity.duration} hours</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                }
+                title={`Details for ${day.long_name}`}
+              >
+                <div className="text-center" style={{ cursor: "pointer" }}>
+                  {value.map((activity, index) => (
+                    <div key={index}>{activity.title}</div>
+                  ))}
+                </div>
+              </Popover>
+            );
+          }
+          return <div className="text-center">-</div>;
+        },
+      })),
+    ];
+  };
 
   const generateDataSource = (semesterTimetable, days, periods) => {
-    return periods.map((period) => ({
+    // Sort periods and days
+    const sortedPeriods = sortPeriods(periods);
+    const sortedDays = sortDays(days);
+
+    return sortedPeriods.map((period) => ({
       key: period.name,
       period: period.long_name,
-      ...days.reduce((acc, day) => {
+      ...sortedDays.reduce((acc, day) => {
         const activities = semesterTimetable.filter(
           (entry) =>
             entry.day.name === day.name &&
@@ -219,6 +289,8 @@ const ViewTimetable = () => {
           sessionId: updatedActivity.session_id,
         })
       ).unwrap();
+
+      console.log(response);
 
       if (response.detail) {
         const conflictDescription = response.detail.match(
@@ -294,6 +366,8 @@ const ViewTimetable = () => {
                 {timetable?.map((semesterTimetable) => {
                   if (semesterTimetable.algorithm !== algorithm) return null;
                   const semester = semesterTimetable.semester;
+
+                  // Use the sorting functions here
                   const columns = generateColumns(
                     days,
                     semesterTimetable._id,
@@ -304,6 +378,7 @@ const ViewTimetable = () => {
                     days,
                     periods
                   );
+
                   return (
                     <Tabs.TabPane
                       tab={`Year ${getSemName(semester).year} Semester ${
