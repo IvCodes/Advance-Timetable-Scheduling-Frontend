@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import Sidebar from "../../../components/sidebar/Sidebar";
 import { Outlet } from "react-router-dom";
 import { 
@@ -10,7 +10,7 @@ import {
   Typography, 
   ConfigProvider, 
   Empty, 
-  Calendar, 
+  Calendar as AntCalendar, 
   Badge, 
   Modal, 
   Button,
@@ -33,7 +33,8 @@ import {
   UserSwitchOutlined,
   CalendarOutlined,
   BookOutlined,
-  ReadOutlined
+  ReadOutlined,
+  ReloadOutlined
 } from '@ant-design/icons';
 import { useSelector, useDispatch } from "react-redux";
 import { 
@@ -48,8 +49,9 @@ import {
 } from "../../admin/DataManagement/data.api";
 import dayjs from 'dayjs';
 
+const API_URL = import.meta.env.VITE_API_URL;
+
 const { Title, Text, Paragraph } = Typography;
-const { TabPane } = Tabs;
 const { TextArea } = Input;
 
 // Function to get all unavailable days for a faculty member
@@ -57,65 +59,154 @@ const getFacultyUnavailableDays = async (facultyId) => {
   try {
     // Call the actual API endpoint
     const token = localStorage.getItem('token');
-    const response = await fetch(`/api/v1/faculty/unavailable-days/${facultyId}`, {
+    const response = await fetch(`${API_URL}faculty/faculty/unavailable-days/${facultyId}`, {
       headers: {
         'Authorization': `Bearer ${token}`
       }
     });
     
     if (!response.ok) {
-      throw new Error(`Error: ${response.status}`);
+      console.error(`Error fetching unavailable days: ${response.status}`);
+      return [];
     }
     
     const data = await response.json();
-    return data;
+    console.log("Unavailable days raw data from API:", data);
+    
+    // Validate and format the data
+    if (Array.isArray(data)) {
+      // Map to ensure consistent format and avoid any potential issues
+      return data.map(day => ({
+        id: day.id,
+        date: day.date,
+        reason: day.reason || '',
+        status: day.status || 'approved',
+        substitute_id: day.substitute_id
+      }));
+    }
+    
+    return [];
   } catch (error) {
-    console.error("Error fetching faculty unavailable days:", error);
-    // Fallback mock data in case the API isn't fully implemented yet
-    return [
-      {
-        date: '2025-03-15',
-        reason: 'Medical appointment',
-        status: 'approved'
-      },
-      {
-        date: '2025-03-20',
-        reason: 'Conference attendance',
-        status: 'pending'
-      },
-      {
-        date: '2025-03-22',
-        reason: 'Family emergency',
-        status: 'approved'
-      },
-    ];
+    console.error("Error in getFacultyUnavailableDays:", error);
+    return [];
+  }
+};
+
+// Function to get information about the current authenticated user
+const getCurrentAuthenticatedUser = () => {
+  try {
+    // Get token to verify we're authenticated
+    const token = localStorage.getItem('token');
+    if (!token) {
+      console.error("No authentication token found");
+      return null;
+    }
+    
+    // Try to parse JWT token to get user information
+    try {
+      // JWT tokens are in format: header.payload.signature
+      const parts = token.split('.');
+      if (parts.length === 3) {
+        const payload = JSON.parse(atob(parts[1]));
+        if (payload && payload.sub) {
+          console.log("User ID extracted from JWT token:", payload.sub);
+          return {
+            id: payload.sub,
+            // Other user details if available in the token
+            ...payload
+          };
+        }
+      }
+    } catch (e) {
+      console.error("Failed to parse JWT token:", e);
+    }
+    
+    // If JWT extraction fails, try all localStorage options
+    for (const key of ['user', 'userData', 'userInfo', 'auth', 'profile']) {
+      const itemStr = localStorage.getItem(key);
+      if (itemStr) {
+        try {
+          const data = JSON.parse(itemStr);
+          if (data && (data.id || data._id || data.userId || data.user_id)) {
+            console.log(`Found user info in localStorage.${key}:`, data);
+            return {
+              id: data.id || data._id || data.userId || data.user_id,
+              ...data
+            };
+          }
+        } catch (e) {
+          console.log(`Error parsing ${key}:`, e);
+        }
+      }
+    }
+    
+    // If we haven't returned yet, try a last fallback to the user_id field
+    const userId = localStorage.getItem('user_id');
+    if (userId) {
+      console.log("Found direct user_id in localStorage:", userId);
+      return { id: userId };
+    }
+    
+    // If we get here, we couldn't find any user info
+    console.error("Could not find user information in localStorage");
+    return null;
+  } catch (error) {
+    console.error("Error in getCurrentAuthenticatedUser:", error);
+    return null;
   }
 };
 
 // Function to mark a day as unavailable
 const markDayAsUnavailable = async (facultyId, date, reason) => {
   try {
-    // Call the actual API endpoint
-    const token = localStorage.getItem('token');
-    const response = await fetch(`/api/v1/faculty/unavailable-days`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        faculty_id: facultyId,
-        date,
-        reason
-      })
-    });
+    // Get authenticated user
+    const currentUser = getCurrentAuthenticatedUser();
     
-    if (!response.ok) {
-      throw new Error(`Error: ${response.status}`);
+    if (!currentUser || !currentUser.id) {
+      console.error("Cannot make API call - user not authenticated");
+      return false;
     }
     
-    const data = await response.json();
-    return data;
+    const userId = currentUser.id;
+    console.log(`Marking ${date} as unavailable for faculty ID: ${userId}`);
+    
+    // Call the actual API endpoint
+    const token = localStorage.getItem('token');
+    
+    // Log the request payload for debugging
+    const payload = {
+      faculty_id: userId,
+      date: date,
+      reason: reason || ''
+    };
+    console.log("Request payload:", payload);
+    
+    const response = await fetch(`${API_URL}faculty/faculty/unavailable-days`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(payload)
+    });
+    
+    // Log the response for debugging
+    console.log("Response status:", response.status);
+    const responseText = await response.text();
+    console.log("Response text:", responseText);
+    
+    // If there's JSON content, parse and return it
+    if (responseText) {
+      try {
+        const responseData = JSON.parse(responseText);
+        console.log("Response data:", responseData);
+        return response.ok;
+      } catch (e) {
+        console.error("Error parsing JSON response:", e);
+      }
+    }
+    
+    return response.ok;
   } catch (error) {
     console.error("Error marking day as unavailable:", error);
     // Return false to indicate failure during development
@@ -126,21 +217,48 @@ const markDayAsUnavailable = async (facultyId, date, reason) => {
 // Function to mark a day as available (remove from unavailable list)
 const markDayAsAvailable = async (facultyId, date) => {
   try {
+    // Get authenticated user
+    const currentUser = getCurrentAuthenticatedUser();
+    
+    if (!currentUser || !currentUser.id) {
+      console.error("Cannot make API call - user not authenticated");
+      return false;
+    }
+    
+    const userId = currentUser.id;
+    console.log(`Marking ${date} as available for faculty ID: ${userId}`);
+    
     // Call the actual API endpoint
     const token = localStorage.getItem('token');
-    const response = await fetch(`/api/v1/faculty/unavailable-days/${facultyId}/${date}`, {
+    
+    const response = await fetch(`${API_URL}faculty/unavailable-days/${userId}/${date}`, {
       method: 'DELETE',
       headers: {
         'Authorization': `Bearer ${token}`
       }
     });
     
-    if (!response.ok) {
-      throw new Error(`Error: ${response.status}`);
+    // Log the response for debugging
+    console.log("Response status:", response.status);
+    
+    try {
+      const responseText = await response.text();
+      console.log("Response text:", responseText);
+      
+      // If there's JSON content, parse and log it
+      if (responseText) {
+        try {
+          const responseData = JSON.parse(responseText);
+          console.log("Response data:", responseData);
+        } catch (e) {
+          console.error("Error parsing JSON response:", e);
+        }
+      }
+    } catch (error) {
+      console.error("Error reading response:", error);
     }
     
-    const data = await response.json();
-    return data.success;
+    return response.ok;
   } catch (error) {
     console.error("Error marking day as available:", error);
     // Return false to indicate failure during development
@@ -176,7 +294,7 @@ const getCurrentClasses = (timetable, facultyId, currentDay, currentPeriod) => {
 
 const FacultyDashboard = () => {
   const dispatch = useDispatch();
-  const { timetable, loading } = useSelector((state) => state.timetable);
+  const { timetable, loading: timetableLoading } = useSelector((state) => state.timetable);
   const { days, periods, subjects, teachers, spaces } = useSelector((state) => state.data);
   
   // Refs for scroll functionality
@@ -188,9 +306,11 @@ const FacultyDashboard = () => {
   const [facultyId, setFacultyId] = useState(null);
   const [facultySubjects, setFacultySubjects] = useState([]);
   const [unavailableDays, setUnavailableDays] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [selectedDate, setSelectedDate] = useState(null);
-  const [isModalVisible, setIsModalVisible] = useState(false);
-  const [unavailabilityReason, setUnavailabilityReason] = useState('');
+  const [reason, setReason] = useState('');
+  const [modalVisible, setModalVisible] = useState(false);
+  const [currentView, setCurrentView] = useState('month');
   
   // Current time tracking
   const [currentDate, setCurrentDate] = useState(dayjs());
@@ -233,6 +353,85 @@ const FacultyDashboard = () => {
     }
   ];
   
+  // Function to get the current faculty ID - either from localStorage or from props
+  const getCurrentFacultyId = () => {
+    try {
+      // Debug: Log all localStorage items to see what's available
+      console.log("LocalStorage contents:");
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        try {
+          const value = localStorage.getItem(key);
+          console.log(`${key}: ${value}`);
+        } catch (e) {
+          console.log(`${key}: [Error reading value]`);
+        }
+      }
+      
+      // Try all possible locations where user ID might be stored
+      // 1. Try user object in localStorage
+      const userString = localStorage.getItem('user');
+      if (userString) {
+        try {
+          const user = JSON.parse(userString);
+          if (user && user.id) {
+            console.log("Found user ID in localStorage.user:", user.id);
+            return user.id;
+          }
+        } catch (e) {
+          console.error("Error parsing user JSON:", e);
+        }
+      }
+      
+      // 2. Try direct user_id in localStorage
+      const userId = localStorage.getItem('user_id');
+      if (userId) {
+        console.log("Found user_id in localStorage:", userId);
+        return userId;
+      }
+      
+      // 3. Try userData object
+      const userDataString = localStorage.getItem('userData');
+      if (userDataString) {
+        try {
+          const userData = JSON.parse(userDataString);
+          if (userData && userData.id) {
+            console.log("Found user ID in localStorage.userData:", userData.id);
+            return userData.id;
+          }
+        } catch (e) {
+          console.error("Error parsing userData JSON:", e);
+        }
+      }
+      
+      // 4. Fallback to facultyId prop if available
+      if (facultyId) {
+        console.log("Using facultyId prop:", facultyId);
+        return facultyId;
+      }
+      
+      // 5. Final fallback - try to get from URL if neither is available
+      const urlParams = new URLSearchParams(window.location.search);
+      const idFromUrl = urlParams.get('id');
+      if (idFromUrl) {
+        console.log("Found ID in URL parameter:", idFromUrl);
+        return idFromUrl;
+      }
+      
+      // If we still don't have an ID, check current user in console
+      console.error("Could not find faculty ID in any location. Debug info:");
+      console.log("localStorage:", Object.keys(localStorage));
+      console.log("facultyId prop:", facultyId);
+      console.log("URL params:", window.location.search);
+      
+      // If we still don't have an ID, return null
+      return null;
+    } catch (error) {
+      console.error("Error getting faculty ID:", error);
+      return facultyId || null; // Fallback to prop
+    }
+  };
+
   // Fetch the needed data on component mount
   useEffect(() => {
     dispatch(getTimetable());
@@ -243,8 +442,18 @@ const FacultyDashboard = () => {
     dispatch(getTeachers());
     
     // Get user details from localStorage
-    const userId = localStorage.getItem("user_id");
-    setFacultyId(userId || "FA0000001"); // Fallback to example ID for demo
+    try {
+      const userString = localStorage.getItem('user');
+      if (userString) {
+        const user = JSON.parse(userString);
+        if (user && user.id) {
+          setFacultyId(user.id);
+          console.log("Set faculty ID from localStorage:", user.id);
+        }
+      }
+    } catch (error) {
+      console.error("Error getting user data from localStorage:", error);
+    }
     
     // Fetch faculty's assigned subjects
     // In production, this would come from an API call
@@ -315,14 +524,38 @@ const FacultyDashboard = () => {
   
   // Fetch unavailable days when facultyId is set
   useEffect(() => {
-    if (facultyId) {
-      const fetchUnavailableDays = async () => {
-        const daysData = await getFacultyUnavailableDays(facultyId);
-        setUnavailableDays(daysData);
-      };
-      fetchUnavailableDays();
-    }
-  }, [facultyId]);
+    const fetchUnavailableDays = async () => {
+      setIsLoading(true);
+      try {
+        const currentFacultyId = getCurrentFacultyId() || getCurrentAuthenticatedUser()?.id;
+        
+        if (!currentFacultyId) {
+          console.warn("Could not determine faculty ID for unavailability");
+          message.warning("Could not determine your faculty ID. Some features may not work correctly.");
+          return;
+        }
+        
+        console.log("Fetching unavailable days for faculty ID:", currentFacultyId);
+        const days = await getFacultyUnavailableDays(currentFacultyId);
+        
+        if (days && Array.isArray(days)) {
+          console.log(`Setting ${days.length} unavailable days in state`);
+          setUnavailableDays(days);
+        } else {
+          console.error("Received invalid data format for unavailable days");
+          setUnavailableDays([]);
+        }
+      } catch (error) {
+        console.error("Error fetching unavailable days:", error);
+        message.error("Failed to load unavailable days");
+        setUnavailableDays([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchUnavailableDays();
+  }, []);
   
   // Update active classes when currentDayName, currentPeriodName, or timetable changes
   useEffect(() => {
@@ -416,34 +649,75 @@ const FacultyDashboard = () => {
     return { year, sem };
   };
   
-  // Calendar date cell renderer
-  const dateCellRender = (date) => {
-    const dateString = date.format('YYYY-MM-DD');
-    const dayOfWeek = date.day(); // 0 is Sunday, 6 is Saturday
+  // Function to create a simple status dataset for calendar rendering
+  const getUnavailabilityStatusMap = () => {
+    const statusMap = {};
     
-    // Skip rendering for weekends (Saturday and Sunday)
-    if (dayOfWeek === 0 || dayOfWeek === 6) {
-      return <Badge status="default" text="Weekend" />;
-    }
+    // Add each unavailable day to the map with its status
+    unavailableDays.forEach(day => {
+      statusMap[day.date] = {
+        status: day.status,
+        reason: day.reason
+      };
+    });
     
-    const unavailableDay = unavailableDays.find(day => day.date === dateString);
-    
-    if (unavailableDay) {
-      return (
-        <div>
-          <Badge status="error" text="Unavailable" />
-          {unavailableDay.reason && (
-            <Tooltip title={unavailableDay.reason}>
-              <InfoCircleOutlined style={{ marginLeft: 5 }} />
-            </Tooltip>
-          )}
-        </div>
-      );
-    }
-    
-    return null;
+    console.log("Availability status map:", statusMap);
+    return statusMap;
   };
-  
+
+  // Create a clean dedicated component for availability calendar
+  const AvailabilityCalendar = () => {
+    const unavailabilityMap = useMemo(() => getUnavailabilityStatusMap(), [unavailableDays]);
+    
+    // Calendar date cell renderer - restored to original style
+    const dateCellRender = (date) => {
+      const dateString = date.format('YYYY-MM-DD');
+      const dayOfWeek = date.day(); // 0 is Sunday, 6 is Saturday
+      
+      // Skip rendering for weekends (Saturday and Sunday)
+      if (dayOfWeek === 0 || dayOfWeek === 6) {
+        return <Badge status="default" text="Weekend" />;
+      }
+      
+      // Check if date is unavailable
+      const dayInfo = unavailabilityMap[dateString];
+      if (dayInfo) {
+        const status = dayInfo.status === 'pending' ? 'warning' : 'error';
+        const text = dayInfo.status === 'pending' ? 'Pending' : 'Unavailable';
+        
+        return (
+          <div>
+            <Badge status={status} text={text} />
+            {dayInfo.reason && (
+              <Tooltip title={dayInfo.reason}>
+                <InfoCircleOutlined style={{ marginLeft: 5 }} />
+              </Tooltip>
+            )}
+          </div>
+        );
+      }
+      
+      return null;
+    };
+    
+    return (
+      <div className="my-4">
+        <AntCalendar
+          fullscreen={true}
+          cellRender={(date, info) => {
+            if (info.type === 'date') {
+              return dateCellRender(date);
+            }
+            return null;
+          }}
+          disabledDate={disabledDate}
+          onSelect={handleCalendarSelect}
+          className="faculty-calendar"
+        />
+      </div>
+    );
+  };
+
   // Calendar date render for disabling weekends
   const disabledDate = (date) => {
     const dayOfWeek = date.day();
@@ -464,106 +738,108 @@ const FacultyDashboard = () => {
     // Check if this date is already marked as unavailable
     const existingDate = unavailableDays.find(day => day.date === date.format('YYYY-MM-DD'));
     if (existingDate) {
-      setUnavailabilityReason(existingDate.reason || '');
+      setReason(existingDate.reason || '');
     } else {
-      setUnavailabilityReason('');
+      setReason('');
     }
     
-    setIsModalVisible(true);
+    setModalVisible(true);
   };
   
   // Handle marking a day as unavailable
-  const handleMarkUnavailable = async (isAvailable) => {
+  const handleMarkUnavailable = async () => {
     if (!selectedDate) return;
     
     const isAlreadyUnavailable = unavailableDays.some(day => day.date === selectedDate);
-    let success;
+    let success = false;
     
-    if (isAlreadyUnavailable && isAvailable) {
+    // Get current authenticated user
+    const currentUser = getCurrentAuthenticatedUser();
+    
+    if (!currentUser || !currentUser.id) {
+      message.error("User authentication information not found. Please log in again.");
+      return;
+    }
+    
+    const currentFacultyId = currentUser.id;
+    console.log("Using authenticated faculty ID:", currentFacultyId);
+    
+    if (isAlreadyUnavailable) {
       // Mark as available (remove from unavailable list)
-      success = await markDayAsAvailable(facultyId, selectedDate);
+      success = await markDayAsAvailable(currentFacultyId, selectedDate);
       if (success) {
-        setUnavailableDays(unavailableDays.filter(day => day.date !== selectedDate));
-        message.success(`You are now available on ${selectedDate}`);
+        setUnavailableDays(prevDays => prevDays.filter(day => day.date !== selectedDate));
+        message.success("Day marked as available");
       } else {
         message.error("Failed to update availability");
       }
-    } else if (!isAlreadyUnavailable && !isAvailable) {
+    } else {
       // Mark as unavailable
-      success = await markDayAsUnavailable(facultyId, selectedDate, unavailabilityReason);
+      success = await markDayAsUnavailable(currentFacultyId, selectedDate, reason);
       if (success) {
-        setUnavailableDays([...unavailableDays, { date: selectedDate, reason: unavailabilityReason }]);
-        message.success(`You are now marked as unavailable on ${selectedDate}`);
+        const newUnavailableDay = { 
+          date: selectedDate,
+          reason: reason || '',
+          status: 'pending'
+        };
+        setUnavailableDays(prevDays => [...prevDays, newUnavailableDay]);
+        message.success("Day marked as unavailable");
       } else {
         message.error("Failed to update availability");
       }
     }
     
-    setIsModalVisible(false);
+    if (success) {
+      setModalVisible(false);
+      setReason('');
+    }
   };
 
   const markClassDayAsUnavailable = async (cls) => {
     try {
-      // Extract date from the class day
-      const classDate = new Date();
-      // Set the day of week based on the class day
-      const dayMapping = {
-        'Monday': 1,
-        'Tuesday': 2,
-        'Wednesday': 3,
-        'Thursday': 4,
-        'Friday': 5,
-        'Saturday': 6,
-        'Sunday': 0
-      };
+      // Format the date from the class
+      const formattedDate = dayjs(cls.date).format('YYYY-MM-DD');
       
-      // Get the day name from the class
-      const dayName = cls.day?.name || '';
+      // Create reason based on class details
+      const reason = `Unavailable for ${cls.subject?.name || 'class'} (${cls.period?.name || 'period'})`;
       
-      // Set to the next occurrence of this day
-      const currentDay = classDate.getDay();
-      const targetDay = dayMapping[dayName];
+      // Get authenticated user
+      const currentUser = getCurrentAuthenticatedUser();
       
-      if (targetDay !== undefined) {
-        const daysToAdd = (targetDay + 7 - currentDay) % 7;
-        classDate.setDate(classDate.getDate() + daysToAdd);
-        
-        // Format the date as YYYY-MM-DD
-        const formattedDate = classDate.toISOString().split('T')[0];
-        
-        // Create reason based on class details
-        const reason = `Unavailable for ${cls.subject?.name || 'class'} (${cls.period?.name || 'period'})`;
-        
-        const response = await fetch(`${API_URL}/faculty/unavailable-days`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            faculty_id: facultyId,
-            date: formattedDate,
-            reason: reason
-          })
+      if (!currentUser || !currentUser.id) {
+        message.error("User authentication information not found. Please log in again.");
+        return false;
+      }
+      
+      const currentFacultyId = currentUser.id;
+      console.log("Using authenticated faculty ID for class day:", currentFacultyId);
+      
+      const token = localStorage.getItem('token');
+      
+      const response = await fetch(`${API_URL}faculty/faculty/unavailable-days`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          faculty_id: currentFacultyId,
+          date: formattedDate,
+          reason: reason
+        })
+      });
+      
+      if (response.ok) {
+        notification.success({
+          message: 'Success',
+          description: `Marked as unavailable for ${dayjs(formattedDate).format('dddd')}`
         });
-        
-        if (response.ok) {
-          notification.success({
-            message: 'Success',
-            description: `Marked as unavailable for ${dayName}`
-          });
-          fetchUnavailableDays();
-        } else {
-          const errorData = await response.json();
-          notification.error({
-            message: 'Error',
-            description: errorData.detail || 'Failed to mark day as unavailable'
-          });
-        }
+        fetchUnavailableDays();
       } else {
+        const errorData = await response.json();
         notification.error({
           message: 'Error',
-          description: 'Invalid day of week'
+          description: errorData.detail || 'Failed to mark day as unavailable'
         });
       }
     } catch (error) {
@@ -679,7 +955,7 @@ const FacultyDashboard = () => {
             ref={timetableRef}
             id="timetable"
           >
-            {loading ? (
+            {isLoading ? (
               <div className="flex justify-center items-center h-64">
                 <Spin size="large" />
               </div>
@@ -693,49 +969,47 @@ const FacultyDashboard = () => {
                   }
                 }}
               >
-                <Tabs type="card">
-                  {timetable
-                    .map((semesterTimetable) => {
-                      const semester = semesterTimetable.semester;
-                      const columns = generateColumns(days);
-                      const dataSource = generateDataSource(
-                        semesterTimetable.timetable,
-                        days,
-                        periods
-                      );
-                      
-                      return (
-                        <TabPane
-                          tab={`Year ${getSemName(semester).year} Semester ${getSemName(semester).sem}`}
-                          key={`${semester}_${semesterTimetable._id || Math.random().toString(36).substring(2, 7)}`}
-                          className="text-lightborder"
-                        >
-                          <ConfigProvider
-                            theme={{
-                              components: {
-                                Table: {
-                                  colorBgContainer: "transparent",
-                                  colorText: "rgba(0,0,0,0.88)",
-                                  headerColor: "rgba(0,0,0,0.88)",
-                                  borderColor: "#d9d9d9",
-                                  headerBg: "#f5f5f5",
-                                }
+                <Tabs
+                  type="card"
+                  items={timetable.map((semesterTimetable) => {
+                    const semester = semesterTimetable.semester;
+                    const columns = generateColumns(days);
+                    const dataSource = generateDataSource(
+                      semesterTimetable.timetable,
+                      days,
+                      periods
+                    );
+
+                    return {
+                      label: `Year ${getSemName(semester).year} Semester ${getSemName(semester).sem}`,
+                      key: `${semester}_${semesterTimetable._id || Math.random().toString(36).substring(2, 7)}`,
+                      children: (
+                        <ConfigProvider
+                          theme={{
+                            components: {
+                              Table: {
+                                colorBgContainer: "transparent",
+                                colorText: "rgba(0,0,0,0.88)",
+                                headerColor: "rgba(0,0,0,0.88)",
+                                borderColor: "#d9d9d9",
+                                headerBg: "#f5f5f5",
                               }
-                            }}
-                          >
-                            <Table
-                              columns={columns}
-                              dataSource={dataSource}
-                              pagination={false}
-                              bordered
-                              size="middle"
-                              className="custom-timetable"
-                            />
-                          </ConfigProvider>
-                        </TabPane>
-                      );
-                    })}
-                </Tabs>
+                            }
+                          }}
+                        >
+                          <Table
+                            columns={columns}
+                            dataSource={dataSource}
+                            pagination={false}
+                            bordered
+                            size="middle"
+                            className="custom-timetable"
+                          />
+                        </ConfigProvider>
+                      ),
+                    };
+                  })}
+                />
               </ConfigProvider>
             ) : (
               <Empty description="No teaching schedule available" />
@@ -756,13 +1030,29 @@ const FacultyDashboard = () => {
                 <br />
                 <Text type="secondary">Note: Weekends are already marked as non-working days.</Text>
               </Paragraph>
+              
+              {/* Use the improved calendar component with original UI */}
+              <AvailabilityCalendar />
+              
+              {/* Button to refresh calendar data - keep this functionality */}
+              <Button 
+                onClick={async () => {
+                  message.info("Refreshing unavailable days...");
+                  const currentFacultyId = getCurrentFacultyId() || getCurrentAuthenticatedUser()?.id;
+                  if (currentFacultyId) {
+                    const days = await getFacultyUnavailableDays(currentFacultyId);
+                    if (days && Array.isArray(days)) {
+                      setUnavailableDays(days);
+                      message.success(`Refreshed ${days.length} unavailable days`);
+                    }
+                  }
+                }}
+                icon={<ReloadOutlined />}
+                style={{ marginTop: '10px' }}
+              >
+                Refresh Calendar
+              </Button>
             </div>
-            <Calendar 
-              dateCellRender={dateCellRender} 
-              onSelect={handleCalendarSelect}
-              disabledDate={disabledDate}
-              className="faculty-calendar"
-            />
           </Card>
           
           {/* Statistics cards for overview of unavailable days */}
@@ -809,9 +1099,9 @@ const FacultyDashboard = () => {
           
           {/* Availability Modal */}
           <Modal
-            title="Update Availability"
-            open={isModalVisible}
-            onCancel={() => setIsModalVisible(false)}
+            title="Mark Unavailability"
+            open={modalVisible}
+            onCancel={() => setModalVisible(false)}
             footer={null}
           >
             <div className="mb-4">
@@ -819,42 +1109,30 @@ const FacultyDashboard = () => {
             </div>
             
             <div className="mb-4">
-              <Space>
-                <Text>Available:</Text>
-                <Switch 
-                  defaultChecked={!unavailableDays.some(day => day.date === selectedDate)}
-                  onChange={(checked) => handleMarkUnavailable(checked)}
-                />
-              </Space>
-            </div>
-            
-            {!unavailableDays.some(day => day.date === selectedDate) && (
-              <div className="mb-4">
-                <Text>Reason for unavailability (optional):</Text>
-                <TextArea 
-                  rows={4} 
-                  placeholder="Enter reason for unavailability" 
-                  value={unavailabilityReason}
-                  onChange={(e) => setUnavailabilityReason(e.target.value)}
-                  className="mt-2"
-                />
-                
-                <div className="mt-4">
-                  <Button 
-                    type="primary" 
-                    onClick={() => handleMarkUnavailable(false)}
-                  >
-                    Mark as Unavailable
-                  </Button>
-                  <Button 
-                    onClick={() => setIsModalVisible(false)}
-                    style={{ marginLeft: 8 }}
-                  >
-                    Cancel
-                  </Button>
-                </div>
+              <Text>Reason for unavailability:</Text>
+              <TextArea 
+                rows={4} 
+                placeholder="Enter reason for unavailability" 
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                className="mt-2"
+              />
+              
+              <div className="mt-4">
+                <Button 
+                  type="primary" 
+                  onClick={() => handleMarkUnavailable()}
+                >
+                  Mark as Unavailable
+                </Button>
+                <Button 
+                  onClick={() => setModalVisible(false)}
+                  style={{ marginLeft: 8 }}
+                >
+                  Cancel
+                </Button>
               </div>
-            )}
+            </div>
           </Modal>
           
           {/* For more complex pages */}
