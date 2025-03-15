@@ -69,6 +69,96 @@ function StudentDashboard() {
     setUserSubjects(["CS101", "CS205", "MA202"]); // Example subject codes
   }, [dispatch]);
 
+  // Helper function to generate columns for the table
+  const generateColumns = (days) => [
+    {
+      title: "Period",
+      dataIndex: "period",
+      key: "period",
+      width: 150,
+      fixed: 'left',
+      render: (text) => (
+        <div className="font-medium text-gray-700">
+          {text}
+        </div>
+      ),
+    },
+    ...days.filter(day => ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].includes(day.name)).map(day => ({
+      title: day.long_name || day.name,
+      dataIndex: day.name,
+      key: day.name,
+      render: (value) => {
+        if (!value) {
+          return <div className="text-center text-gray-400">-</div>;
+        }
+        
+        const { title, subjectName, room, teacher } = value;
+        const content = (
+          <div>
+            <p><strong>Subject:</strong> {subjectName}</p>
+            <p><strong>Room:</strong> {room}</p>
+            <p><strong>Teacher:</strong> {teacher}</p>
+            {value.duration && (
+              <p><strong>Duration:</strong> {value.duration} hours</p>
+            )}
+          </div>
+        );
+        
+        return (
+          <Popover content={content} title={`Details for ${day.long_name || day.name}`}>
+            <div className="text-center p-1 rounded bg-blue-50 border border-blue-100">
+              <div className="font-medium text-blue-800 mb-1">{subjectName}</div>
+              <div className="text-xs text-gray-600">Room: {room}</div>
+            </div>
+          </Popover>
+        );
+      },
+    })),
+  ];
+
+  // Extract activity matching logic to reduce nesting depth
+  const findMatchingActivity = (timetableEntries, day, period) => {
+    if (!timetableEntries || !Array.isArray(timetableEntries)) {
+      return null;
+    }
+    
+    return timetableEntries.find(entry => 
+      entry.day.name === day.name && 
+      entry.period.some(p => p.name === period.name || p.long_name === period.long_name)
+    );
+  };
+  
+  // Extract cell data preparation to reduce nesting depth
+  const prepareCellData = (activity) => {
+    if (!activity) {
+      return null;
+    }
+    
+    // Find the teacher name from the teachers array
+    const teacherDetails = teachers?.find(t => t.id === activity.teacher);
+    const teacherName = teacherDetails 
+      ? `${teacherDetails.first_name} ${teacherDetails.last_name}` 
+      : activity.teacher;
+    
+    // Find the subject details from the subjects array
+    const subjectDetails = subjects?.find(s => s.code === activity.subject);
+    const subjectName = subjectDetails?.name || activity.subject;
+    
+    // Find the room details from the spaces array
+    const roomDetails = spaces?.find(s => s.name === activity.room?.name);
+    const roomName = roomDetails?.long_name || roomDetails?.name || activity.room?.name || 'Unknown Room';
+    
+    return {
+      title: `${subjectName} (${roomName})`,
+      subject: activity.subject,
+      subjectName: subjectName,
+      room: roomName,
+      teacher: teacherName,
+      duration: activity.duration,
+      activity: activity
+    };
+  };
+  
   // Helper function to generate dataSource for the table
   const generateDataSource = (semesterTimetable, days, periods) => {
     // Make sure we have data to work with
@@ -81,167 +171,19 @@ function StudentDashboard() {
       return [];
     }
     
-    console.log("Generating timetable for student with entries:", semesterTimetable);
-    console.log("Available periods:", periods);
-    
-    // Filter to only include weekdays
-    const weekdayNames = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
-    const weekdayDays = days.filter(day => 
-      weekdayNames.includes(day.name.toLowerCase())
-    );
-    
-    // Sort periods by start time
-    const sortedPeriods = [...(periods || [])].sort((a, b) => {
-      // Extract hours and minutes from period times
-      if (!a.start_time || !b.start_time) return 0;
-      
-      const [aHours, aMinutes] = a.start_time.split(':').map(Number);
-      const [bHours, bMinutes] = b.start_time.split(':').map(Number);
-      
-      // Compare hours first, then minutes if hours are equal
-      if (aHours !== bHours) {
-        return aHours - bHours;
-      }
-      return aMinutes - bMinutes;
-    });
-    
-    console.log("Sorted periods:", sortedPeriods.map(p => `${p.name}: ${p.long_name}`));
-    console.log("Weekday days:", weekdayDays.map(d => `${d.name}: ${d.long_name}`));
-    
-    if (sortedPeriods.length === 0) {
-      console.warn("No periods available to generate timetable!");
-      return [];
-    }
-    
-    return sortedPeriods.map((period, periodIndex) => {
+    return periods.map((period, periodIndex) => {
       const rowData = {
         key: periodIndex,
-        period: `${period.long_name || period.name}\n${period.start_time || ''} - ${period.end_time || ''}`,
+        period: period.long_name || period.name,
       };
       
-      // Add a column for each day
-      weekdayDays.forEach(day => {
-        // Find activity for this cell
-        const activity = semesterTimetable.find(entry => {
-          // Check if day matches (case insensitive)
-          const dayMatch = 
-            entry.day &&
-            (entry.day.name?.toLowerCase() === day.name?.toLowerCase() || 
-             entry.day.long_name?.toLowerCase() === day.long_name?.toLowerCase());
-          
-          if (!dayMatch) return false;
-          
-          // Check if period matches
-          let periodMatch = false;
-          
-          if (entry.period) {
-            if (Array.isArray(entry.period)) {
-              // Check each period in the array
-              periodMatch = entry.period.some(p => 
-                p.name?.toLowerCase() === period.name?.toLowerCase() ||
-                p.long_name?.toLowerCase().includes(period.long_name?.toLowerCase())
-              );
-            } else {
-              // Single period object
-              periodMatch = 
-                entry.period.name?.toLowerCase() === period.name?.toLowerCase() ||
-                entry.period.long_name?.toLowerCase().includes(period.long_name?.toLowerCase());
-            }
-          }
-          
-          if (dayMatch && periodMatch) {
-            console.log(`Found match: Day=${day.name}, Period=${period.name}, Subject=${entry.subject}`);
-          }
-          
-          return dayMatch && periodMatch;
-        });
-        
-        // If we found an activity for this day/period
-        if (activity) {
-          // Find the teacher name from the teachers array
-          const teacherDetails = teachers?.find(t => t.id === activity.teacher);
-          const teacherName = teacherDetails 
-            ? `${teacherDetails.first_name} ${teacherDetails.last_name}` 
-            : activity.teacher;
-          
-          // Find the subject details from the subjects array
-          const subjectDetails = subjects?.find(s => s.code === activity.subject);
-          const subjectName = subjectDetails?.name || activity.subject;
-          
-          // Find the room details from the spaces array
-          const roomDetails = spaces?.find(s => s.name === activity.room?.name);
-          const roomName = roomDetails?.long_name || roomDetails?.name || activity.room?.name || 'Unknown Room';
-          
-          rowData[day.name] = {
-            title: `${subjectName} (${roomName})`,
-            subject: activity.subject,
-            subjectName: subjectName,
-            room: roomName,
-            teacher: teacherName,
-            duration: activity.duration,
-            activity: activity
-          };
-        } else {
-          rowData[day.name] = null;
-        }
+      days.forEach(day => {
+        const activity = findMatchingActivity(semesterTimetable, day, period);
+        rowData[day.name] = prepareCellData(activity);
       });
       
       return rowData;
     });
-  };
-
-  // Helper function to generate columns for the table
-  const generateColumns = (days) => {
-    // Filter to only include weekdays
-    const weekdayNames = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
-    const weekdayDays = days.filter(day => 
-      weekdayNames.includes(day.name.toLowerCase())
-    );
-    
-    // First column is for period names
-    const columns = [
-      {
-        title: 'Period',
-        dataIndex: 'period',
-        key: 'period',
-        width: '120px',
-        fixed: 'left',
-        render: (text) => (
-          <div className="whitespace-pre-line font-medium text-gray-700">
-            {text}
-          </div>
-        ),
-      },
-    ];
-    
-    // Add a column for each day
-    weekdayDays.forEach((day) => {
-      columns.push({
-        title: day.long_name || day.name,
-        dataIndex: day.name,
-        key: day.name,
-        width: '160px',
-        render: (record) => {
-          if (!record) {
-            return <div className="h-full w-full text-center text-gray-400">-</div>;
-          }
-          
-          return (
-            <div className="p-1 rounded bg-blue-50 border border-blue-100">
-              <div className="font-medium text-blue-800 mb-1">{record.subjectName}</div>
-              <div className="text-xs text-gray-600">Room: {record.room}</div>
-              {record.teacher && (
-                <div className="text-xs text-gray-600 truncate">
-                  Faculty: {record.teacher}
-                </div>
-              )}
-            </div>
-          );
-        },
-      });
-    });
-    
-    return columns;
   };
 
   return (
