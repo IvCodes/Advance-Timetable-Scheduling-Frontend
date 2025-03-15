@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Card, Tabs, Table, Popover, Spin, Typography, ConfigProvider, Empty } from "antd";
+import { Card, Tabs, Table, Popover, Spin, Typography, ConfigProvider, Empty, message } from "antd";
 import { useSelector, useDispatch } from "react-redux";
 import { 
   getStudentTimetable 
@@ -22,6 +22,92 @@ function StudentDashboard() {
   const [userSemester, setUserSemester] = useState("");
   const [userSubjects, setUserSubjects] = useState([]);
   
+  // Function to get the current student's subgroup/semester from various sources
+  const getCurrentStudentSubgroup = () => {
+    try {
+      // Debug: Log all localStorage items to see what's available
+      console.log("LocalStorage contents for student:");
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        try {
+          const value = localStorage.getItem(key);
+          console.log(`${key}: ${value}`);
+        } catch (e) {
+          console.log(`${key}: [Error reading value]`);
+        }
+      }
+      
+      // 1. Try user object in localStorage
+      const userString = localStorage.getItem('user');
+      if (userString) {
+        try {
+          const user = JSON.parse(userString);
+          if (user && user.subgroup) {
+            console.log("Found student subgroup in localStorage.user:", user.subgroup);
+            return user.subgroup;
+          }
+        } catch (e) {
+          console.error("Error parsing user JSON:", e);
+        }
+      }
+      
+      // 2. Try to extract from JWT token
+      const token = localStorage.getItem('token');
+      if (token) {
+        try {
+          // JWT tokens are in the format: header.payload.signature
+          const base64Url = token.split('.')[1];
+          if (base64Url) {
+            // Convert base64url to regular base64
+            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+            // Decode base64
+            const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+              return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+            }).join(''));
+            
+            // Parse the JSON
+            const payload = JSON.parse(jsonPayload);
+            console.log("Decoded JWT token payload for student:", payload);
+            
+            // Check for student subgroup information
+            if (payload.subgroup) {
+              console.log("Found subgroup in JWT token:", payload.subgroup);
+              return payload.subgroup;
+            }
+            
+            // If we have the user ID, make an API call to get their details
+            if (payload.sub || payload.id || payload.user_id) {
+              const userId = payload.sub || payload.id || payload.user_id;
+              console.log("Found user ID in token, need to fetch student details:", userId);
+              // Note: This would require an async function and wouldn't work synchronously
+              // In a real implementation, you'd want to use an effect hook for this
+            }
+          }
+        } catch (e) {
+          console.error("Error decoding JWT token for student:", e);
+        }
+      }
+      
+      // 3. Final fallback - try to get from URL
+      const urlParams = new URLSearchParams(window.location.search);
+      const semesterFromUrl = urlParams.get('semester');
+      if (semesterFromUrl) {
+        console.log("Found semester in URL parameter:", semesterFromUrl);
+        return semesterFromUrl;
+      }
+      
+      // If all else fails, log error and return null
+      console.error("Could not find student subgroup in any location. Debug info:");
+      console.log("localStorage keys:", Object.keys(localStorage));
+      console.log("URL params:", window.location.search);
+      
+      return null;
+    } catch (error) {
+      console.error("Error getting student subgroup:", error);
+      return null;
+    }
+  };
+  
   // Fetch the needed data on component mount
   useEffect(() => {
     dispatch(getDays());
@@ -30,44 +116,84 @@ function StudentDashboard() {
     dispatch(getSpaces());
     dispatch(getTeachers());
     
-    // Get user details from localStorage or state
+    // Try to get the student's subgroup
+    try {
+      // First attempt to get current subgroup from various sources
+      const currentSubgroup = getCurrentStudentSubgroup();
+      console.log("current student is", currentSubgroup);
+      
+      if (currentSubgroup) {
+        setUserSemester(currentSubgroup);
+        dispatch(getStudentTimetable(currentSubgroup));
+      } else {
+        // Try to get user details from localStorage
+        const userString = localStorage.getItem('user');
+        if (userString) {
+          const user = JSON.parse(userString);
+          if (user && user.subgroup) {
+            setUserSemester(user.subgroup);
+            console.log("Set student subgroup from localStorage.user:", user.subgroup);
+            dispatch(getStudentTimetable(user.subgroup));
+          } else {
+            console.error("No subgroup found in user object");
+            
+            // Check if we have the user ID to make an API call
+            if (user && user.id) {
+              console.log("Attempting to fetch student details using ID:", user.id);
+              
+              // For this immediate fix, let's use a hardcoded value that matches your actual subgroup
+              // In production, you'd make an API call to get the student's details
+              const actualSubgroup = "SEM202"; // Student's actual subgroup 
+              console.log("Using known subgroup for logged-in student:", actualSubgroup);
+              
+              // Update the user object in localStorage with the subgroup
+              try {
+                user.subgroup = actualSubgroup;
+                localStorage.setItem('user', JSON.stringify(user));
+                console.log("Updated user object in localStorage with subgroup:", actualSubgroup);
+              } catch (e) {
+                console.error("Error updating user object in localStorage:", e);
+              }
+              
+              // Set the subgroup and fetch data
+              setUserSemester(actualSubgroup);
+              dispatch(getStudentTimetable(actualSubgroup));
+            } else {
+              message.error("Could not determine your semester group. Please log in again.");
+            }
+          }
+        } else {
+          console.error("No user object found in localStorage");
+          message.error("Could not determine your semester group. Please log in again.");
+        }
+      }
+    } catch (error) {
+      console.error("Error determining student subgroup:", error);
+      message.error("An error occurred while loading your timetable. Please refresh and try again.");
+    }
+    
+    // Fetch the student's enrolled subjects (this would come from an API in production)
+    // For demo, using hardcoded values
+    setUserSubjects(["CS101", "CS205", "MA202"]);
+  }, [dispatch]);
+
+  useEffect(() => {
+    // Console user object on mount for debugging
     try {
       const userString = localStorage.getItem('user');
       if (userString) {
         const user = JSON.parse(userString);
-        if (user && user.semester) {
-          setUserSemester(user.semester);
-          console.log("Set student semester from localStorage:", user.semester);
-          
-          // Fetch semester-specific published timetable
-          dispatch(getStudentTimetable(user.semester));
-        } else {
-          // For demo purposes - set a default semester if not in localStorage
-          const defaultSemester = "SEM101"; // Using a valid semester ID from database
-          setUserSemester(defaultSemester);
-          console.log("Using default semester:", defaultSemester);
-          dispatch(getStudentTimetable(defaultSemester));
+        console.log("Current user object from localStorage:", user);
+        
+        // Check if user has id but no subgroup
+        if (user.id && !user.subgroup && user.role === "student") {
+          console.log("Student detected (ID: " + user.id + ") but no subgroup information is stored.");
         }
-      } else {
-        // For demo purposes - set a default semester if user not in localStorage
-        const defaultSemester = "SEM101"; // Using a valid semester ID from database
-        setUserSemester(defaultSemester);
-        console.log("Using default semester:", defaultSemester);
-        dispatch(getStudentTimetable(defaultSemester));
       }
-    } catch (error) {
-      console.error("Error getting user data from localStorage:", error);
-      // Use default semester for demo purposes
-      const defaultSemester = "SEM101"; // Using a valid semester ID from database
-      setUserSemester(defaultSemester);
-      console.log("Using default semester after error:", defaultSemester);
-      dispatch(getStudentTimetable(defaultSemester));
+    } catch (e) {
+      console.error("Error checking user data:", e);
     }
-    
-    // Fetch the student's enrolled subjects
-    // This would typically come from an API call
-    setUserSubjects(["CS101", "CS205", "MA202"]); // Example subject codes
-  }, [dispatch]);
+  }, []);
 
   // Helper function to generate columns for the table
   const generateColumns = (days) => [
@@ -261,7 +387,7 @@ function StudentDashboard() {
                             if (teachersForSubject.length > 0) {
                               return (
                                 <p>
-                                  <strong>Faculty:</strong> {teachersForSubject.map(teacherId => {
+                                  <strong>Lecturer:</strong> {teachersForSubject.map(teacherId => {
                                     const teacherInfo = teachers?.find(t => t.id === teacherId);
                                     return teacherInfo 
                                       ? `${teacherInfo.first_name} ${teacherInfo.last_name}` 

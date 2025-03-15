@@ -65,6 +65,30 @@ function Login() {
       localStorage.setItem("role", role);
       console.log("Saved user role:", role);
       
+      // Save user ID for easier access
+      if (userData.id) {
+        localStorage.setItem("user_id", userData.id);
+        console.log("Saved user ID:", userData.id);
+      } else if (userData.user_id) {
+        localStorage.setItem("user_id", userData.user_id);
+        console.log("Saved user ID (from user_id field):", userData.user_id);
+      }
+      
+      // Save the full user object for reference
+      try {
+        localStorage.setItem("user", JSON.stringify({
+          id: userData.id || userData.user_id,
+          username: userData.username,
+          role: role,
+          // For students, save their subgroup information
+          ...(role === "student" && userData.subgroup && { subgroup: userData.subgroup }),
+          // Add any other necessary user fields
+        }));
+        console.log("Saved user object to localStorage");
+      } catch (error) {
+        console.error("Failed to save user object to localStorage:", error);
+      }
+      
       // Navigate based on role
       if (role === "admin") {
         navigate("/admin/dashboard");

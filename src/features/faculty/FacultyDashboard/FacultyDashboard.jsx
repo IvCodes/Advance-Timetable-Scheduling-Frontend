@@ -356,7 +356,7 @@ const FacultyDashboard = () => {
     }
   ];
   
-  // Function to get the current faculty ID - either from localStorage or from props
+  // Function to get the current faculty ID from various sources
   const getCurrentFacultyId = () => {
     try {
       // Debug: Log all localStorage items to see what's available
@@ -371,8 +371,14 @@ const FacultyDashboard = () => {
         }
       }
       
-      // Try all possible locations where user ID might be stored
-      // 1. Try user object in localStorage
+      // 1. Try direct user_id in localStorage (most reliable)
+      const userId = localStorage.getItem('user_id');
+      if (userId) {
+        console.log("Found user_id in localStorage:", userId);
+        return userId;
+      }
+      
+      // 2. Try user object in localStorage
       const userString = localStorage.getItem('user');
       if (userString) {
         try {
@@ -384,13 +390,6 @@ const FacultyDashboard = () => {
         } catch (e) {
           console.error("Error parsing user JSON:", e);
         }
-      }
-      
-      // 2. Try direct user_id in localStorage
-      const userId = localStorage.getItem('user_id');
-      if (userId) {
-        console.log("Found user_id in localStorage:", userId);
-        return userId;
       }
       
       // 3. Try userData object
@@ -407,13 +406,50 @@ const FacultyDashboard = () => {
         }
       }
       
-      // 4. Fallback to facultyId prop if available
+      // 4. Try to extract from JWT token
+      const token = localStorage.getItem('token');
+      if (token) {
+        try {
+          // JWT tokens are in the format: header.payload.signature
+          const base64Url = token.split('.')[1];
+          if (base64Url) {
+            // Convert base64url to regular base64
+            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+            // Decode base64
+            const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+              return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+            }).join(''));
+            
+            // Parse the JSON
+            const payload = JSON.parse(jsonPayload);
+            console.log("Decoded JWT token payload:", payload);
+            
+            // Look for common fields that might contain the user ID
+            if (payload.sub) {
+              console.log("Found user ID in JWT token (sub field):", payload.sub);
+              return payload.sub;
+            }
+            if (payload.id) {
+              console.log("Found user ID in JWT token (id field):", payload.id);
+              return payload.id;
+            }
+            if (payload.user_id) {
+              console.log("Found user ID in JWT token (user_id field):", payload.user_id);
+              return payload.user_id;
+            }
+          }
+        } catch (e) {
+          console.error("Error decoding JWT token:", e);
+        }
+      }
+      
+      // 5. Fallback to facultyId prop if available
       if (facultyId) {
         console.log("Using facultyId prop:", facultyId);
         return facultyId;
       }
       
-      // 5. Final fallback - try to get from URL if neither is available
+      // 6. Final fallback - try to get from URL if neither is available
       const urlParams = new URLSearchParams(window.location.search);
       const idFromUrl = urlParams.get('id');
       if (idFromUrl) {
@@ -455,26 +491,41 @@ const FacultyDashboard = () => {
           // Fetch faculty-specific published timetable
           dispatch(getFacultyTimetable(user.id));
         } else {
-          // Use a default faculty ID for demo purposes
-          const defaultFacultyId = "FA0000001";
-          setFacultyId(defaultFacultyId);
-          console.log("Using default faculty ID:", defaultFacultyId);
-          dispatch(getFacultyTimetable(defaultFacultyId));
+          // Try to get faculty ID from other sources
+          const currentFacultyId = getCurrentFacultyId();
+          if (currentFacultyId) {
+            setFacultyId(currentFacultyId);
+            console.log("Set faculty ID from getCurrentFacultyId:", currentFacultyId);
+            dispatch(getFacultyTimetable(currentFacultyId));
+          } else {
+            console.error("No faculty ID found, cannot load timetable");
+            message.error("Could not determine your faculty ID. Please log in again.");
+          }
         }
       } else {
-        // Use a default faculty ID for demo purposes
-        const defaultFacultyId = "FA0000001";
-        setFacultyId(defaultFacultyId);
-        console.log("Using default faculty ID:", defaultFacultyId);
-        dispatch(getFacultyTimetable(defaultFacultyId));
+        // Try to get faculty ID from other sources
+        const currentFacultyId = getCurrentFacultyId();
+        if (currentFacultyId) {
+          setFacultyId(currentFacultyId);
+          console.log("Set faculty ID from getCurrentFacultyId:", currentFacultyId);
+          dispatch(getFacultyTimetable(currentFacultyId));
+        } else {
+          console.error("No faculty ID found, cannot load timetable");
+          message.error("Could not determine your faculty ID. Please log in again.");
+        }
       }
     } catch (error) {
       console.error("Error getting user data from localStorage:", error);
-      // Use a default faculty ID for demo purposes
-      const defaultFacultyId = "FA0000001";
-      setFacultyId(defaultFacultyId);
-      console.log("Using default faculty ID after error:", defaultFacultyId);
-      dispatch(getFacultyTimetable(defaultFacultyId));
+      // Try to get faculty ID from other sources
+      const currentFacultyId = getCurrentFacultyId();
+      if (currentFacultyId) {
+        setFacultyId(currentFacultyId);
+        console.log("Set faculty ID from getCurrentFacultyId after error:", currentFacultyId);
+        dispatch(getFacultyTimetable(currentFacultyId));
+      } else {
+        console.error("No faculty ID found after error, cannot load timetable");
+        message.error("Could not determine your faculty ID. Please log in again.");
+      }
     }
     
     // Fetch faculty's assigned subjects
@@ -1216,7 +1267,7 @@ const FacultyDashboard = () => {
               <Button 
                 onClick={async () => {
                   message.info("Refreshing unavailable days...");
-                  const currentFacultyId = getCurrentFacultyId() || getCurrentAuthenticatedUser()?.id;
+                  const currentFacultyId = getCurrentFacultyId();
                   if (currentFacultyId) {
                     const days = await getFacultyUnavailableDays(currentFacultyId);
                     if (days && Array.isArray(days)) {
