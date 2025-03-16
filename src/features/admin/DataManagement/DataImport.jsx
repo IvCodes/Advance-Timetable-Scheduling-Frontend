@@ -10,6 +10,7 @@ const { Title, Text } = Typography;
 
 const DataImport = () => {
   const [fileList, setFileList] = useState([]);
+  const [fileFormat, setFileFormat] = useState('xlsx'); // Default to Excel format
   const [uploading, setUploading] = useState(false);
   const [uploadResults, setUploadResults] = useState(null);
   const [entityType, setEntityType] = useState('activities');
@@ -22,13 +23,13 @@ const DataImport = () => {
   ];
 
   const handleDownloadTemplate = async () => {
-    try {
-      await downloadTemplate(entityType);
-      message.success(`Template for ${entityType} downloaded successfully!`);
-    } catch (error) {
-      message.error(`Failed to download template: ${error.message}`);
-    }
-  };
+  try {
+    await downloadTemplate(entityType, fileFormat);
+    message.success(`Template for ${entityType} downloaded successfully!`);
+  } catch (error) {
+    message.error(`Failed to download template: ${error.message}`);
+  }
+};
 
   const handleUpload = async () => {
     if (fileList.length === 0) {
@@ -110,7 +111,19 @@ const DataImport = () => {
             placeholder="Select the type of data to import"
           />
           
-          <Text strong>Step 2: Download Template</Text>
+          <Text strong>Step 2: Select File Format</Text>
+          <Select
+            options={[
+              { label: 'Excel (.xlsx)', value: 'xlsx' },
+              { label: 'CSV (.csv)', value: 'csv' }
+            ]}
+            value={fileFormat}
+            onChange={setFileFormat}
+            style={{ width: '100%' }}
+            placeholder="Select the type of data to import"
+          />
+          
+          <Text strong>Step 3: Download Template</Text>
           <Button 
             icon={<DownloadOutlined />} 
             onClick={handleDownloadTemplate}
@@ -119,7 +132,7 @@ const DataImport = () => {
             Download Template
           </Button>
           
-          <Text strong>Step 3: Upload Completed File</Text>
+          <Text strong>Step 4: Upload Completed File</Text>
           <Upload {...uploadProps}>
             <Button icon={<UploadOutlined />} style={{ width: '100%' }}>
               Select File

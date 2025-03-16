@@ -377,29 +377,32 @@ export const deleteActivity = createAsyncThunk(
 
 //ETL
 
-export const downloadTemplate = async (entityType) => {
+export const downloadTemplate = async (entityType, format = 'xlsx') => {
   try {
-    const response = await fetch(`/api/etl/templates/${entityType}`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      },
+    const response = await api.get(`/etl/etl/templates/${entityType}?format=${format}`, {
+      responseType: 'arraybuffer'
     });
     
-    if (!response.ok) {
-      throw new Error('Failed to download template');
-    }
+    // Create the correct MIME type based on format
+    const mimeType = format === 'csv' ? 
+      'text/csv' : 
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
     
-    // Handle file download
-    const blob = await response.blob();
+    const blob = new Blob([response.data], { type: mimeType });
     const url = window.URL.createObjectURL(blob);
+    
+    // Create a link element and trigger download
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${entityType}_template.xlsx`;
+    a.download = `${entityType}_template.${format}`;
     document.body.appendChild(a);
     a.click();
-    window.URL.revokeObjectURL(url);
-    document.body.removeChild(a);
+    
+    // Clean up
+    setTimeout(() => {
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    }, 0);
     
     return true;
   } catch (error) {
@@ -410,22 +413,18 @@ export const downloadTemplate = async (entityType) => {
 
 export const uploadData = async (entityType, formData) => {
   try {
-    const response = await fetch(`/api/etl/upload/${entityType}`, {
-      method: 'POST',
+    const response = await api.post(`/etl/etl/upload/${entityType}`, formData, {
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      },
-      body: formData
+        'Content-Type': 'multipart/form-data'
+      }
     });
     
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.detail || 'Failed to upload data');
-    }
-    
-    return await response.json();
+    return response.data;
   } catch (error) {
     console.error('Error uploading data:', error);
+    if (error.response && error.response.data) {
+      throw new Error(error.response.data.detail || 'Failed to upload data');
+    }
     throw error;
   }
 };

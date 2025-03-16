@@ -111,7 +111,7 @@ function Home() {
                   <Route path="subjects" element={<Subjects />} />
                   <Route path="years" element={<Years />} />
                   <Route path="tags" element={<Tags />} />
-                  <Route path="DataImport" element={<DataImport />} />
+                  <Route path="import" element={<DataImport />} />
 
                 </Route>
                 <Route path="timetable/*" element={<Timetable />}>
