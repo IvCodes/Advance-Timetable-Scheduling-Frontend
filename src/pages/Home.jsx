@@ -36,6 +36,7 @@ import Activities from "../features/admin/DataManagement/Activities";
 import Subactivities from "../features/admin/DataManagement/Subactivities";
 import Subjects from "../features/admin/DataManagement/Subjects/Subjects";
 import Years from "../features/admin/DataManagement/Years";
+import DataImport from "../features/admin/DataManagement/DataImport";
 
 import TimeConstraints from "../features/admin/TimeConstraints/TimeConstraints";
 import ConstraintsList from "../features/admin/TimeConstraints/ConstraintsList";
@@ -110,6 +111,8 @@ function Home() {
                   <Route path="subjects" element={<Subjects />} />
                   <Route path="years" element={<Years />} />
                   <Route path="tags" element={<Tags />} />
+                  <Route path="DataImport" element={<DataImport />} />
+
                 </Route>
                 <Route path="timetable/*" element={<Timetable />}>
                   <Route index element={<Navigate to="generate" />} />

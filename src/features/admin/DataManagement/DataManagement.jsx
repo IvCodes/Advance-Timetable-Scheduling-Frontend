@@ -13,6 +13,8 @@ const sidebarLinks = [
   { id: 7, href: "/admin/data/activities", text: "Activities" },
   { id: 8, href: "/admin/data/years", text: "Year and Subgroups" },
   // { id: 8, href: "/admin/data/subactivities", text: "Subactivities" },
+  { id: 10, href: "/admin/data/import", text: "Bulk Data Import" }, // Add this new route
+
 ];
 
 function DataManagement() {

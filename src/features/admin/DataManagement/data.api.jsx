@@ -374,3 +374,58 @@ export const deleteActivity = createAsyncThunk(
     }
   }
 );
+
+//ETL
+
+export const downloadTemplate = async (entityType) => {
+  try {
+    const response = await fetch(`/api/etl/templates/${entityType}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to download template');
+    }
+    
+    // Handle file download
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${entityType}_template.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    
+    return true;
+  } catch (error) {
+    console.error('Error downloading template:', error);
+    throw error;
+  }
+};
+
+export const uploadData = async (entityType, formData) => {
+  try {
+    const response = await fetch(`/api/etl/upload/${entityType}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      body: formData
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.detail || 'Failed to upload data');
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error uploading data:', error);
+    throw error;
+  }
+};
