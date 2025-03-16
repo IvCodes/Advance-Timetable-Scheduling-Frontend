@@ -126,12 +126,6 @@ const AdminHome = () => {
 
   return (
     <div className="p-6" style={{ backgroundColor: '#f0f2f5' }}>
-      {/* Active Timetable Section */}
-      <Row className="mb-6">
-        <Col span={24}>
-          <Title level={3}>Active Timetable</Title>
-        </Col>
-      </Row>
       <Row>
         <Col span={24}>
           <Card 
