@@ -45,9 +45,13 @@ import BreakConstraints from "../features/admin/TimeConstraints/BreakConstraints
 import Timetable from "../features/admin/Timetable/Timetable";
 import Generate from "../features/admin/Timetable/Generate";
 import ViewTimetable from "../features/admin/Timetable/ViewTimetable";
+import FacultyUnavailability from "../features/admin/Timetable/FacultyUnavailability";
 import StudentDashboard from "./../features/students/StudentDashboard/StudentDashboard";
 
 import FacultyDashboard from "../features/faculty/FacultyDashboard/FacultyDashboard";
+import ReportsIndex from "../features/admin/Reports/ReportsIndex";
+import TeacherAllocationReport from "../features/admin/Reports/TeacherAllocationReport";
+import SpaceOccupancyReport from "../features/admin/Reports/SpaceOccupancyReport";
 
 function Home() {
   const { isAuthenticated, role } = useSelector((state) => state.auth);
@@ -118,6 +122,14 @@ function Home() {
                   <Route index element={<Navigate to="generate" />} />
                   <Route path="generate" element={<Generate />} />
                   <Route path="view" element={<ViewTimetable />} />
+                  <Route path="faculty-unavailability" element={<FacultyUnavailability />} />
+                </Route>
+
+                <Route path="reports/*" element={<ReportsIndex />}>
+                  <Route index element={<Navigate to="overview" />} />
+                  <Route path="overview" element={<ReportsIndex />} />
+                  <Route path="teacher-allocation" element={<TeacherAllocationReport />} />
+                  <Route path="space-occupancy" element={<SpaceOccupancyReport />} />
                 </Route>
 
                 <Route path="time/*" element={<TimeConstraints />}>
