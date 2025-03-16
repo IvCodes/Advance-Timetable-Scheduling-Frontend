@@ -1,177 +1,174 @@
-import React, { useState } from "react";
-import { Alert, Card, Typography, Row, Col, Button } from "antd";
-import moment from "moment";
-import { getPeriods } from "../DataManagement/data.api";
-import { useSelector, useDispatch } from "react-redux";
-import { useEffect } from "react";
+import React, { useState, useEffect } from 'react';
+import { Typography, Row, Col, Card, Button, Table, Empty, Modal, Spin } from 'antd';
 import {
-  getSelectedAlgorithm,
-  getNotifications,
-  setNotificationRead,
-  markAllNotificationsRead
-} from "../Timetable/timetable.api";
+  DownloadOutlined,
+  FileExcelOutlined,
+  FileOutlined,
+  HomeOutlined
+} from '@ant-design/icons';
+import { useDispatch, useSelector } from 'react-redux';
+import { getPublishedTimetable } from '../Timetable/timetable.api';
+import moment from 'moment';
+
+const { Title } = Typography;
 
 const AdminHome = () => {
-  const { periods } = useSelector((state) => state.data);
-  const { selectedAlgorithm, notifications } = useSelector(
-    (state) => state.timetable
-  );
-  const [showAllNotifications, setShowAllNotifications] = useState(false);
-
   const dispatch = useDispatch();
-
+  const [exportModalVisible, setExportModalVisible] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [publishedTimetable, setPublishedTimetable] = useState(null);
+  
   useEffect(() => {
-    dispatch(getPeriods());
-    dispatch(getSelectedAlgorithm());
-    dispatch(getNotifications());
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        // Fetch the published timetable directly from the backend
+        const timetableResult = await dispatch(getPublishedTimetable()).unwrap();
+        setPublishedTimetable(timetableResult);
+      } catch (error) {
+        console.error("Error fetching data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchData();
   }, [dispatch]);
 
-  const getCurrentPeriod = () => {
-    const now = moment();
-    const timeRanges = periods.map((period) => {
-      const [startTime, endTime] = period.long_name.split(" - ");
-      return {
-        name: period.name,
-        startTime,
-        endTime,
-        isInterval: period.is_interval,
-      };
-    });
+  // Function to export timetable as PDF
+  const exportAsPDF = () => {
+    // Implementation for PDF export
+    console.log('Exporting as PDF...');
+    setExportModalVisible(false);
+  };
+
+  // Function to export timetable as HTML
+  const exportAsHTML = () => {
+    // Implementation for HTML export
+    console.log('Exporting as HTML...');
+    setExportModalVisible(false);
+  };
+
+  // Function to render the timetable view
+  const renderTimetableView = () => {
+    if (loading) {
+      return (
+        <div className="flex justify-center items-center p-10">
+          <Spin size="large" />
+        </div>
+      );
+    }
+
+    if (!publishedTimetable || !publishedTimetable.timetable) {
+      return <Empty description="No published timetable available" />;
+    }
+
+    // Format timetable data for rendering
+    const timetableData = [];
+    
+    // Example structure - adjust based on your actual data structure
+    if (publishedTimetable.timetable.days) {
+      publishedTimetable.timetable.days.forEach(day => {
+        publishedTimetable.timetable.periods.forEach(period => {
+          const slot = publishedTimetable.timetable.slots?.find(
+            slot => slot.day === day.name && slot.period === period.name
+          );
+          
+          if (slot) {
+            timetableData.push({
+              key: `${day.name}-${period.name}`,
+              day: day.name,
+              period: period.name,
+              time: period.long_name,
+              subject: slot.subject,
+              teacher: slot.teacher,
+              room: slot.room,
+              class: slot.student_group || 'N/A'
+            });
+          }
+        });
+      });
+    }
+
+    const columns = [
+      { title: 'Day', dataIndex: 'day', key: 'day' },
+      { title: 'Period', dataIndex: 'period', key: 'period' },
+      { title: 'Time', dataIndex: 'time', key: 'time' },
+      { title: 'Subject', dataIndex: 'subject', key: 'subject' },
+      { title: 'Teacher', dataIndex: 'teacher', key: 'teacher' },
+      { title: 'Room', dataIndex: 'room', key: 'room' },
+      { title: 'Class', dataIndex: 'class', key: 'class' }
+    ];
+
     return (
-      timeRanges.find(
-        (p) =>
-          now.isBetween(
-            moment(p.startTime, "HH:mm"),
-            moment(p.endTime, "HH:mm")
-          ) || now.isSame(moment(p.startTime, "HH:mm"), "minute")
-      ) || { name: "NA", startTime: "-", endTime: "-" }
+      <div>
+        <div className="flex justify-between mb-4">
+          <Title level={4}>Current Published Timetable</Title>
+          <Button 
+            type="primary" 
+            icon={<DownloadOutlined />} 
+            onClick={() => setExportModalVisible(true)}
+          >
+            Export
+          </Button>
+        </div>
+        <Table
+          dataSource={timetableData}
+          columns={columns}
+          bordered
+          size="middle"
+          pagination={{ pageSize: 10 }}
+          scroll={{ x: 'max-content' }}
+        />
+      </div>
     );
   };
 
-  const handleNotificationRead = (id) => {
-    dispatch(setNotificationRead(id));
-    dispatch(getNotifications());
-  };
-
-const handleMarkAllAsRead = async () => {
-  try {
-    await dispatch(markAllNotificationsRead()).unwrap();
-    await dispatch(getNotifications());
-  } catch (error) {
-    console.error("Error marking all notifications as read:", error);
-  }
-};
-  const currentPeriod = getCurrentPeriod();
-  // Get only the 5 most recent notifications for the compact view
-  const sortedNotifications = [...notifications]
-    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-    
-  const recentNotifications = sortedNotifications.slice(0, 5);
-  
-  // Determine which notifications to display based on the toggle state
-  const displayedNotifications = showAllNotifications ? sortedNotifications : recentNotifications;
-  
-    return (
-      <div className="p-6">
-        <div className="flex w-full justify-between space-x-10">
-          <div className="flex-1 p-4 border-2 rounded-lg h-48 flex-col flex">
-            <div className="text-lg font-thin">Current Period</div>
-            <div className="flex-1 content-center">
-              <div className="text-6xl font-black">{currentPeriod.name}</div>
-              <div className="text-xl font-regular">
-                {currentPeriod.startTime} - {currentPeriod.endTime}
-              </div>
-            </div>
-          </div>
-          <div className="flex-1 p-4 border-2 rounded-lg h-48 flex flex-col">
-            <div className="text-lg font-thin">Selected Algorithm</div>
-            <div className="flex-1 content-center">
-              <div className="text-5xl font-black">
-                {selectedAlgorithm?.selected_algorithm == "GA"
-                  ? "Genetic Algorithm"
-                  : selectedAlgorithm?.selected_algorithm == "CO"
-                  ? "Ant Colony Optimization"
-                  : selectedAlgorithm?.selected_algorithm == "RL"
-                  ? "Reinforcement Learning"
-                  : "-"}
-              </div>
-            </div>
-          </div>
-          <div className="flex-1 p-4 border-2 rounded-lg h-48 flex flex-col">
-            <div className="text-lg font-thin">Additional Information</div>
-          </div>
+  return (
+    <div className="p-6" style={{ backgroundColor: '#f0f2f5' }}>
+      {/* Active Timetable Section */}
+      <Row className="mb-6">
+        <Col span={24}>
+          <Title level={3}>Active Timetable</Title>
+        </Col>
+      </Row>
+      <Row>
+        <Col span={24}>
+          <Card 
+            bodyStyle={{ padding: '12px 24px' }}
+          >
+            {renderTimetableView()}
+          </Card>
+        </Col>
+      </Row>
+      
+      {/* Export Modal */}
+      <Modal
+        title="Export Timetable"
+        open={exportModalVisible}
+        onCancel={() => setExportModalVisible(false)}
+        footer={null}
+      >
+        <div className="p-4 flex justify-center space-x-4">
+          <Button 
+            type="primary" 
+            icon={<FileExcelOutlined />} 
+            size="large"
+            onClick={exportAsPDF}
+          >
+            Export as PDF
+          </Button>
+          <Button 
+            type="default" 
+            icon={<FileOutlined />} 
+            size="large"
+            onClick={exportAsHTML}
+          >
+            Export as HTML
+          </Button>
         </div>
-  
-        <div className="mt-14 mb-6">
-          <div className="flex justify-between items-center">
-            <div className="text-3xl font-bold">Notifications</div>
-            <div className="flex space-x-4">
-              {notifications.length > 0 && (
-                <Button 
-                  type="primary" 
-                  size="small" 
-                  onClick={handleMarkAllAsRead}
-                >
-                  Mark All as Read
-                </Button>
-              )}
-              {notifications.length > 5 && (
-                <Button 
-                  type="default" 
-                  size="small" 
-                  onClick={() => setShowAllNotifications(!showAllNotifications)}
-                >
-                  {showAllNotifications ? "Show Recent" : "Show All"}
-                </Button>
-              )}
-            </div>
-          </div>
-          <hr className="mt-2" />
-          {notifications && notifications.length > 0 ? (
-            <div className="mt-4">
-              {displayedNotifications.map((notification, index) => (
-                <Alert
-                  key={notification._id || index}
-                  message={notification.message}
-                  type={notification.type === "timetable" ? "info" : notification.type}
-                  showIcon
-                  className="mb-2 py-1 text-sm"
-                  closable
-                  closeIcon={
-                    <span
-                      onClick={() => handleNotificationRead(notification._id)}
-                      className="text-blue-500 text-xs cursor-pointer hover:underline"
-                    >
-                      Mark as Read
-                    </span>
-                  }
-                  description={
-                    <div className="text-xs text-gray-500">
-                      {notification.timestamp ? moment(notification.timestamp).fromNow() : "Unknown time"}
-                    </div>
-                  }
-                />
-              ))}
-              {notifications.length > 5 && (
-                <div className="text-center mt-2">
-                  <Button 
-                    type="link" 
-                    onClick={() => setShowAllNotifications(!showAllNotifications)}
-                  >
-                    {showAllNotifications 
-                      ? "Show fewer notifications" 
-                      : `Show ${notifications.length - 5} more notifications`}
-                  </Button>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="mt-10">No new notifications</div>
-          )}
-        </div>
-      </div>
-   
-  
+      </Modal>
+    </div>
   );
 };
 
