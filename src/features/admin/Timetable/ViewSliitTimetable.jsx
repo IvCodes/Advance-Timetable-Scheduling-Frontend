@@ -1,16 +1,43 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, Fragment } from "react";
 import { useSelector, useDispatch } from "react-redux";
-import { Table, Spin, Button, Card, Space, Row, Col, Tabs, Typography, Descriptions, Badge, Tag, Divider, Statistic, message, Tooltip, Modal, Form, Input, Select, InputNumber } from "antd";
-import { 
-  FileTextOutlined, 
-  BarChartOutlined, 
-  CheckCircleOutlined, 
+import {
+  Table,
+  Spin,
+  Button,
+  Card,
+  Space,
+  Row,
+  Col,
+  Tabs,
+  Typography,
+  Descriptions,
+  Badge,
+  Tag,
+  Divider,
+  Statistic,
+  message,
+  Tooltip,
+  Modal,
+  Form,
+  Input,
+  Select,
+  InputNumber,
+} from "antd";
+import {
+  FileTextOutlined,
+  BarChartOutlined,
+  CheckCircleOutlined,
   ExperimentOutlined,
   ExportOutlined,
   InfoCircleOutlined,
-  PlusOutlined
+  PlusOutlined,
 } from "@ant-design/icons";
-import { getSliitTimetables, getTimetableHtmlUrl, getTimetableStats, generateSliitTimetable } from "./timetable.api";
+import {
+  getSliitTimetables,
+  getTimetableHtmlUrl,
+  getTimetableStats,
+  generateSliitTimetable,
+} from "./timetable.api";
 
 const { Title, Text } = Typography;
 
@@ -33,7 +60,7 @@ const ViewSliitTimetable = () => {
         const result = await dispatch(getSliitTimetables()).unwrap();
         console.log("Fetched timetables:", result);
         setTimetables(result);
-        
+
         // Select the first timetable by default if available
         if (result && result.length > 0) {
           setSelectedTimetable(result[0]);
@@ -53,14 +80,17 @@ const ViewSliitTimetable = () => {
   // Fetch statistics for a specific timetable
   const fetchTimetableStats = async (timetableId) => {
     if (!timetableId) return;
-    
+
     setStatsLoading(true);
     try {
       const result = await dispatch(getTimetableStats(timetableId)).unwrap();
       console.log("Fetched stats:", result);
       setStats(result);
     } catch (error) {
-      console.error(`Error fetching statistics for timetable with ID ${timetableId}:`, error);
+      console.error(
+        `Error fetching statistics for timetable with ID ${timetableId}:`,
+        error,
+      );
       setStats(null);
     } finally {
       setStatsLoading(false);
@@ -95,37 +125,39 @@ const ViewSliitTimetable = () => {
       message.error("No timetable ID provided");
       return;
     }
-    
+
     try {
       const htmlUrl = getTimetableHtmlUrl(timetableId);
       console.log("Opening HTML URL:", htmlUrl);
-      
+
       // Show loading message
       const loadingMessage = message.loading("Opening timetable view...", 0);
-      
+
       // Create a hidden iframe to check if the URL is valid
-      const iframe = document.createElement('iframe');
-      iframe.style.display = 'none';
+      const iframe = document.createElement("iframe");
+      iframe.style.display = "none";
       iframe.onload = () => {
         // Success - open in new tab
-        window.open(htmlUrl, '_blank');
+        window.open(htmlUrl, "_blank");
         loadingMessage();
       };
       iframe.onerror = () => {
         // Error loading
         loadingMessage();
-        message.error("Error loading timetable HTML. The server may have encountered an error.");
+        message.error(
+          "Error loading timetable HTML. The server may have encountered an error.",
+        );
       };
-      
+
       // Set a timeout in case the load event doesn't fire
       setTimeout(() => {
         if (document.body.contains(iframe)) {
           document.body.removeChild(iframe);
           loadingMessage();
-          window.open(htmlUrl, '_blank');
+          window.open(htmlUrl, "_blank");
         }
       }, 2000);
-      
+
       // Add to document to start loading
       document.body.appendChild(iframe);
       iframe.src = htmlUrl;
@@ -138,8 +170,8 @@ const ViewSliitTimetable = () => {
   // Get algorithm description
   const getAlgorithmDescription = (algorithm) => {
     if (!algorithm) return "No detailed information available.";
-    
-    switch(algorithm.toLowerCase()) {
+
+    switch (algorithm.toLowerCase()) {
       case "nsga2":
         return "NSGA-II is a multi-objective optimization algorithm that uses a non-dominated sorting approach. It excels at finding a diverse set of Pareto-optimal solutions, making it effective for complex timetabling problems with competing objectives.";
       case "spea2":
@@ -158,9 +190,11 @@ const ViewSliitTimetable = () => {
 
   // Handle the form submission for timetable generation
   const handleGenerateSubmit = async (values) => {
+    let generationNotice = null;
+
     try {
       setGenerationLoading(true);
-      
+
       // Prepare the parameters for the API call
       const parameters = {
         name: values.name,
@@ -168,34 +202,61 @@ const ViewSliitTimetable = () => {
         dataset: "sliit",
         parameters: {
           population: values.population,
-          generations: values.generations
-        }
+          generations: values.generations,
+        },
       };
-      
+
       // Call the API to generate the timetable
       console.log("Generating timetable with parameters:", parameters);
-      const result = await dispatch(generateSliitTimetable(parameters)).unwrap();
-      
+
+      // Show a loading notification
+      generationNotice = message.loading(
+        `Generating timetable using ${formatAlgorithmName(values.algorithm)}. This may take a few minutes...`,
+        0,
+      );
+
+      const result = await dispatch(
+        generateSliitTimetable(parameters),
+      ).unwrap();
+
       // Refresh the timetable list
       const updatedTimetables = await dispatch(getSliitTimetables()).unwrap();
       setTimetables(updatedTimetables);
-      
+
       // Select the newly generated timetable
       if (result?._id) {
         setSelectedTimetable(result);
         fetchTimetableStats(result._id);
       }
-      
+
       // Close the modal and reset the form
       setIsGenerateModalVisible(false);
       form.resetFields();
-      
+
       // Show success message
-      message.success(`Timetable "${values.name}" has been generated successfully using ${formatAlgorithmName(values.algorithm)}`);
+      message.success(
+        `Timetable "${values.name}" has been generated successfully using ${formatAlgorithmName(values.algorithm)}`,
+      );
     } catch (error) {
       console.error("Error generating timetable:", error);
-      message.error("Failed to generate timetable. Please try again.");
+
+      // Format a detailed error message
+      let errorMessage = "Failed to generate timetable. Please try again.";
+
+      // Check for server response errors (status codes)
+      if (error.response?.data?.detail) {
+        errorMessage = `Server error: ${error.response.data.detail}`;
+      } else if (error.response?.status === 500) {
+        errorMessage =
+          "Server error: Internal server error occurred during timetable generation.";
+      } else if (error.message) {
+        errorMessage = `Error: ${error.message}`;
+      }
+
+      message.error(errorMessage, 5); // Display for 5 seconds
     } finally {
+      // Always clear the loading notification
+      generationNotice?.();
       setGenerationLoading(false);
     }
   };
@@ -209,12 +270,22 @@ const ViewSliitTimetable = () => {
   // Get algorithm options for the select dropdown
   const getAlgorithmOptions = () => {
     const algorithms = [
-      { value: 'nsga2', label: 'NSGA-II (Non-dominated Sorting Genetic Algorithm II)' },
-      { value: 'spea2', label: 'SPEA2 (Strength Pareto Evolutionary Algorithm 2)' },
-      { value: 'moead', label: 'MOEA/D (Multi-objective Evolutionary Algorithm Based on Decomposition)' }
+      {
+        value: "nsga2",
+        label: "NSGA-II (Non-dominated Sorting Genetic Algorithm II)",
+      },
+      {
+        value: "spea2",
+        label: "SPEA2 (Strength Pareto Evolutionary Algorithm 2)",
+      },
+      {
+        value: "moead",
+        label:
+          "MOEA/D (Multi-objective Evolutionary Algorithm Based on Decomposition)",
+      },
     ];
-    
-    return algorithms.map(algorithm => (
+
+    return algorithms.map((algorithm) => (
       <Select.Option key={algorithm.value} value={algorithm.value}>
         {algorithm.label}
       </Select.Option>
@@ -225,9 +296,9 @@ const ViewSliitTimetable = () => {
     <div className="bg-white p-6 rounded-xl shadow-md max-w-6xl mx-auto">
       <div className="flex justify-between items-center mb-4">
         <Title level={2}>SLIIT Timetables</Title>
-        <Button 
-          type="primary" 
-          icon={<PlusOutlined />} 
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
           onClick={showGenerateModal}
         >
           Generate New Timetable
@@ -241,8 +312,10 @@ const ViewSliitTimetable = () => {
         </div>
       ) : timetables.length === 0 ? (
         <Card>
-          <div style={{ textAlign: 'center', padding: '40px 0' }}>
-            <Text type="secondary">No timetables available. Generate a timetable first.</Text>
+          <div style={{ textAlign: "center", padding: "40px 0" }}>
+            <Text type="secondary">
+              No timetables available. Generate a timetable first.
+            </Text>
           </div>
         </Card>
       ) : (
@@ -250,27 +323,40 @@ const ViewSliitTimetable = () => {
           {/* Timetable List */}
           <Col xs={24} lg={8}>
             <Card title="Generated Timetables" bordered={false}>
-              <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
+              <div style={{ maxHeight: "500px", overflowY: "auto" }}>
                 {timetables.map((timetable) => (
-                  <Card 
-                    key={timetable._id} 
-                    style={{ 
-                      marginBottom: '10px',
-                      borderLeft: selectedTimetable?._id === timetable._id ? '3px solid #1890ff' : 'none',
-                      cursor: 'pointer'
+                  <Card
+                    key={timetable._id}
+                    style={{
+                      marginBottom: "10px",
+                      borderLeft:
+                        selectedTimetable?._id === timetable._id
+                          ? "3px solid #1890ff"
+                          : "none",
+                      cursor: "pointer",
                     }}
                     hoverable
                     onClick={() => handleTimetableSelect(timetable)}
                   >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
                       <div>
                         <Text strong>{timetable.name}</Text>
                         <div>
                           <Tag color="blue">{timetable.algorithm}</Tag>
-                          <Tag color="green">Pop: {timetable.parameters?.population || 'N/A'}</Tag>
-                          <Tag color="purple">Gen: {timetable.parameters?.generations || 'N/A'}</Tag>
+                          <Tag color="green">
+                            Pop: {timetable.parameters?.population || "N/A"}
+                          </Tag>
+                          <Tag color="purple">
+                            Gen: {timetable.parameters?.generations || "N/A"}
+                          </Tag>
                         </div>
-                        <Text type="secondary" style={{ fontSize: '12px' }}>
+                        <Text type="secondary" style={{ fontSize: "12px" }}>
                           {new Date(timetable.createdAt).toLocaleString()}
                         </Text>
                       </div>
@@ -284,13 +370,19 @@ const ViewSliitTimetable = () => {
           {/* Timetable Details */}
           <Col xs={24} lg={16}>
             {selectedTimetable ? (
-              <Card 
+              <Card
                 title={
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
                     <span>{selectedTimetable.name}</span>
                     <Space>
-                      <Button 
-                        type="primary" 
+                      <Button
+                        type="primary"
                         icon={<ExportOutlined />}
                         onClick={() => viewTimetableHtml(selectedTimetable._id)}
                       >
@@ -302,30 +394,54 @@ const ViewSliitTimetable = () => {
                 bordered={false}
               >
                 <Tabs defaultActiveKey="overview">
-                  <Tabs.TabPane tab={<span><FileTextOutlined /> Overview</span>} key="overview">
-                    <Descriptions title="Timetable Information" bordered column={2}>
-                      <Descriptions.Item label="Name">{selectedTimetable.name}</Descriptions.Item>
+                  <Tabs.TabPane
+                    tab={
+                      <span>
+                        <FileTextOutlined /> Overview
+                      </span>
+                    }
+                    key="overview"
+                  >
+                    <Descriptions
+                      title="Timetable Information"
+                      bordered
+                      column={2}
+                    >
+                      <Descriptions.Item label="Name">
+                        {selectedTimetable.name}
+                      </Descriptions.Item>
                       <Descriptions.Item label="Algorithm">
                         {formatAlgorithmName(selectedTimetable.algorithm)}
                       </Descriptions.Item>
-                      <Descriptions.Item label="Dataset">{selectedTimetable.dataset}</Descriptions.Item>
+                      <Descriptions.Item label="Dataset">
+                        {selectedTimetable.dataset}
+                      </Descriptions.Item>
                       <Descriptions.Item label="Created At">
                         {new Date(selectedTimetable.createdAt).toLocaleString()}
                       </Descriptions.Item>
                       <Descriptions.Item label="Population Size">
-                        {selectedTimetable.parameters?.population || 'N/A'}
+                        {selectedTimetable.parameters?.population || "N/A"}
                       </Descriptions.Item>
                       <Descriptions.Item label="Number of Generations">
-                        {selectedTimetable.parameters?.generations || 'N/A'}
+                        {selectedTimetable.parameters?.generations || "N/A"}
                       </Descriptions.Item>
                     </Descriptions>
                   </Tabs.TabPane>
-                  
-                  <Tabs.TabPane tab={<span><CheckCircleOutlined /> Metrics</span>} key="metrics">
+
+                  <Tabs.TabPane
+                    tab={
+                      <span>
+                        <CheckCircleOutlined /> Metrics
+                      </span>
+                    }
+                    key="metrics"
+                  >
                     {statsLoading ? (
-                      <div style={{ textAlign: 'center', padding: '40px 0' }}>
+                      <div style={{ textAlign: "center", padding: "40px 0" }}>
                         <Spin />
-                        <div style={{ marginTop: '10px' }}>Loading metrics...</div>
+                        <div style={{ marginTop: "10px" }}>
+                          Loading metrics...
+                        </div>
                       </div>
                     ) : stats ? (
                       <div>
@@ -335,13 +451,18 @@ const ViewSliitTimetable = () => {
                               <Statistic
                                 title={
                                   <span>
-                                    Room Utilization 
+                                    Room Utilization
                                     <Tooltip title="Percentage of room slots that are efficiently utilized">
-                                      <InfoCircleOutlined style={{ marginLeft: 8 }} />
+                                      <InfoCircleOutlined
+                                        style={{ marginLeft: 8 }}
+                                      />
                                     </Tooltip>
                                   </span>
                                 }
-                                value={stats.metrics?.room_utilization?.toFixed(2) || "N/A"}
+                                value={
+                                  stats.metrics?.room_utilization?.toFixed(2) ||
+                                  "N/A"
+                                }
                                 suffix="%"
                                 precision={2}
                               />
@@ -354,11 +475,17 @@ const ViewSliitTimetable = () => {
                                   <span>
                                     Teacher Satisfaction
                                     <Tooltip title="Percentage of teacher preferences that were accommodated">
-                                      <InfoCircleOutlined style={{ marginLeft: 8 }} />
+                                      <InfoCircleOutlined
+                                        style={{ marginLeft: 8 }}
+                                      />
                                     </Tooltip>
                                   </span>
                                 }
-                                value={stats.metrics?.teacher_satisfaction?.toFixed(2) || "N/A"}
+                                value={
+                                  stats.metrics?.teacher_satisfaction?.toFixed(
+                                    2,
+                                  ) || "N/A"
+                                }
                                 suffix="%"
                                 precision={2}
                               />
@@ -371,11 +498,17 @@ const ViewSliitTimetable = () => {
                                   <span>
                                     Student Satisfaction
                                     <Tooltip title="Percentage of student preferences that were accommodated">
-                                      <InfoCircleOutlined style={{ marginLeft: 8 }} />
+                                      <InfoCircleOutlined
+                                        style={{ marginLeft: 8 }}
+                                      />
                                     </Tooltip>
                                   </span>
                                 }
-                                value={stats.metrics?.student_satisfaction?.toFixed(2) || "N/A"}
+                                value={
+                                  stats.metrics?.student_satisfaction?.toFixed(
+                                    2,
+                                  ) || "N/A"
+                                }
                                 suffix="%"
                                 precision={2}
                               />
@@ -388,57 +521,92 @@ const ViewSliitTimetable = () => {
                                   <span>
                                     Time Efficiency
                                     <Tooltip title="Efficiency score for time slot distribution">
-                                      <InfoCircleOutlined style={{ marginLeft: 8 }} />
+                                      <InfoCircleOutlined
+                                        style={{ marginLeft: 8 }}
+                                      />
                                     </Tooltip>
                                   </span>
                                 }
-                                value={stats.metrics?.time_efficiency?.toFixed(2) || "N/A"}
+                                value={
+                                  stats.metrics?.time_efficiency?.toFixed(2) ||
+                                  "N/A"
+                                }
                                 suffix="%"
                                 precision={2}
                               />
                             </Card>
                           </Col>
                         </Row>
-                        
-                        <Divider orientation="left">Constraint Violations</Divider>
-                        
+
+                        <Divider orientation="left">
+                          Constraint Violations
+                        </Divider>
+
                         <Descriptions bordered column={2}>
                           <Descriptions.Item label="Hard Constraint Violations">
-                            <Badge status={stats.metrics?.hardConstraintViolations > 0 ? "error" : "success"} />
+                            <Badge
+                              status={
+                                stats.metrics?.hardConstraintViolations > 0
+                                  ? "error"
+                                  : "success"
+                              }
+                            />
                             {stats.metrics?.hardConstraintViolations || 0}
                           </Descriptions.Item>
                           <Descriptions.Item label="Soft Constraint Score">
-                            {stats.metrics?.softConstraintScore?.toFixed(2) || 0}
+                            {stats.metrics?.softConstraintScore?.toFixed(2) ||
+                              0}
                           </Descriptions.Item>
                           <Descriptions.Item label="Unassigned Activities">
-                            <Badge status={stats.metrics?.unassignedActivities > 0 ? "warning" : "success"} />
+                            <Badge
+                              status={
+                                stats.metrics?.unassignedActivities > 0
+                                  ? "warning"
+                                  : "success"
+                              }
+                            />
                             {stats.metrics?.unassignedActivities || 0}
                           </Descriptions.Item>
                           <Descriptions.Item label="Execution Time">
-                            {stats.stats?.execution_time ? `${stats.stats.execution_time.toFixed(2)} seconds` : "N/A"}
+                            {stats.stats?.execution_time
+                              ? `${stats.stats.execution_time.toFixed(2)} seconds`
+                              : "N/A"}
                           </Descriptions.Item>
                         </Descriptions>
                       </div>
                     ) : (
-                      <div style={{ textAlign: 'center', padding: '40px 0' }}>
-                        <Text type="secondary">No metrics available for this timetable.</Text>
+                      <div style={{ textAlign: "center", padding: "40px 0" }}>
+                        <Text type="secondary">
+                          No metrics available for this timetable.
+                        </Text>
                       </div>
                     )}
                   </Tabs.TabPane>
-                  
-                  <Tabs.TabPane tab={<span><ExperimentOutlined /> Algorithm</span>} key="algorithm">
+
+                  <Tabs.TabPane
+                    tab={
+                      <span>
+                        <ExperimentOutlined /> Algorithm
+                      </span>
+                    }
+                    key="algorithm"
+                  >
                     <Descriptions title="Algorithm Information" bordered>
                       <Descriptions.Item label="Algorithm" span={3}>
                         {formatAlgorithmName(selectedTimetable.algorithm)}
                       </Descriptions.Item>
                       <Descriptions.Item label="Description" span={3}>
-                        <Text>{getAlgorithmDescription(selectedTimetable.algorithm)}</Text>
+                        <Text>
+                          {getAlgorithmDescription(selectedTimetable.algorithm)}
+                        </Text>
                       </Descriptions.Item>
                       <Descriptions.Item label="Parameters" span={3}>
                         <div>
-                          <Text strong>Population Size:</Text> {selectedTimetable.parameters?.population || 'N/A'} 
+                          <Text strong>Population Size:</Text>{" "}
+                          {selectedTimetable.parameters?.population || "N/A"}
                           <br />
-                          <Text strong>Number of Generations:</Text> {selectedTimetable.parameters?.generations || 'N/A'}
+                          <Text strong>Number of Generations:</Text>{" "}
+                          {selectedTimetable.parameters?.generations || "N/A"}
                         </div>
                       </Descriptions.Item>
                     </Descriptions>
@@ -447,8 +615,10 @@ const ViewSliitTimetable = () => {
               </Card>
             ) : (
               <Card>
-                <div style={{ textAlign: 'center', padding: '40px 0' }}>
-                  <Text type="secondary">Select a timetable to view details</Text>
+                <div style={{ textAlign: "center", padding: "40px 0" }}>
+                  <Text type="secondary">
+                    Select a timetable to view details
+                  </Text>
                 </div>
               </Card>
             )}
@@ -471,68 +641,86 @@ const ViewSliitTimetable = () => {
           initialValues={{
             algorithm: "nsga2",
             population: 100,
-            generations: 50
+            generations: 50,
           }}
         >
           <Form.Item
             name="name"
             label="Timetable Name"
-            rules={[{ required: true, message: "Please enter a name for the timetable" }]}
+            rules={[
+              {
+                required: true,
+                message: "Please enter a name for the timetable",
+              },
+            ]}
           >
             <Input placeholder="e.g., SLIIT Summer 2025 Timetable" />
           </Form.Item>
-          
+
           <Form.Item
             name="algorithm"
             label="Algorithm"
             rules={[{ required: true, message: "Please select an algorithm" }]}
           >
-            <Select>
-              {getAlgorithmOptions()}
-            </Select>
+            <Select>{getAlgorithmOptions()}</Select>
           </Form.Item>
-          
+
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item
                 name="population"
                 label="Population Size"
-                rules={[{ required: true, message: "Please enter population size" }]}
+                rules={[
+                  { required: true, message: "Please enter population size" },
+                ]}
               >
-                <InputNumber min={10} max={500} style={{ width: '100%' }} />
+                <InputNumber min={10} max={500} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
             <Col span={12}>
               <Form.Item
                 name="generations"
                 label="Number of Generations"
-                rules={[{ required: true, message: "Please enter number of generations" }]}
+                rules={[
+                  {
+                    required: true,
+                    message: "Please enter number of generations",
+                  },
+                ]}
               >
-                <InputNumber min={10} max={200} style={{ width: '100%' }} />
+                <InputNumber min={10} max={200} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
           </Row>
-          
+
           <Form.Item>
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
               <Button style={{ marginRight: 8 }} onClick={handleGenerateCancel}>
                 Cancel
               </Button>
-              <Button type="primary" htmlType="submit" loading={generationLoading}>
+              <Button
+                type="primary"
+                htmlType="submit"
+                loading={generationLoading}
+              >
                 Generate
               </Button>
             </div>
           </Form.Item>
-          
-          <div style={{ marginTop: '16px' }}>
+
+          <div style={{ marginTop: "16px" }}>
             <Divider orientation="left">Algorithm Information</Divider>
-            <div style={{ backgroundColor: '#f5f5f5', padding: '16px', borderRadius: '8px' }}>
+            <div
+              style={{
+                backgroundColor: "#f5f5f5",
+                padding: "16px",
+                borderRadius: "8px",
+              }}
+            >
               <Form.Item noStyle shouldUpdate>
                 {({ getFieldValue }) => {
-                  const algorithm = getFieldValue('algorithm');
-                  return (
-                    <Text>{getAlgorithmDescription(algorithm)}</Text>
-                  );
+                  const algorithm = getFieldValue("algorithm");
+                  return <Text>{getAlgorithmDescription(algorithm)}</Text>;
                 }}
               </Form.Item>
             </div>
