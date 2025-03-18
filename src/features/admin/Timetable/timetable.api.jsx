@@ -200,6 +200,39 @@ export const getNotifications = createAsyncThunk(
   }
 );
 
+// SLIIT Timetable API functions
+export const generateSliitTimetable = createAsyncThunk(
+  "timetable/generateSliit",
+  async (parameters) => {
+    const response = await api.post("/timetable/sliit/generate", parameters);
+    return response.data;
+  }
+);
+
+export const getSliitTimetables = createAsyncThunk(
+  "timetable/getSliitTimetables",
+  async () => {
+    const response = await api.get("/timetable/sliit/timetable_sliit");
+    return response.data;
+  }
+);
+
+export const getTimetableHtmlUrl = (timetableId) => {
+  return `${api.defaults.baseURL}/timetable/sliit/html/${timetableId}`;
+};
+
+export const getTimetableStatsUrl = (timetableId) => {
+  return `${api.defaults.baseURL}/timetable/sliit/stats/${timetableId}`;
+};
+
+export const getTimetableStats = createAsyncThunk(
+  "timetable/getTimetableStats",
+  async (timetableId) => {
+    const response = await api.get(`/timetable/sliit/stats/${timetableId}`);
+    return response.data;
+  }
+);
+
 export const setNotificationRead = createAsyncThunk(
   "timetable/read",
   async (id) => {

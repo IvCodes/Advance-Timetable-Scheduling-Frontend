@@ -47,6 +47,7 @@ import Generate from "../features/admin/Timetable/Generate";
 import ViewTimetable from "../features/admin/Timetable/ViewTimetable";
 import FacultyUnavailability from "../features/admin/Timetable/FacultyUnavailability";
 import StudentDashboard from "./../features/students/StudentDashboard/StudentDashboard";
+import ViewSliitTimetable from "../features/admin/Timetable/ViewSliitTimetable";
 
 import FacultyDashboard from "../features/faculty/FacultyDashboard/FacultyDashboard";
 import ReportsIndex from "../features/admin/Reports/ReportsIndex";
@@ -122,6 +123,7 @@ function Home() {
                   <Route index element={<Navigate to="generate" />} />
                   <Route path="generate" element={<Generate />} />
                   <Route path="view" element={<ViewTimetable />} />
+                  <Route path="view-sliit" element={<ViewSliitTimetable />} />
                   <Route path="faculty-unavailability" element={<FacultyUnavailability />} />
                 </Route>
 
