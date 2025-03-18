@@ -202,27 +202,54 @@ export const getNotifications = createAsyncThunk(
 
 // SLIIT Timetable API functions
 export const generateSliitTimetable = createAsyncThunk(
-  "timetable/generateSliit",
+  "timetable/generateSliitTimetable",
   async (parameters) => {
-    const response = await api.post("/timetable/sliit/generate", parameters);
-    return response.data;
+    try {
+      console.log("Generating timetable with parameters:", parameters);
+      const response = await api.post("/timetable/sliit/generate", parameters);
+      return response.data;
+    } catch (error) {
+      console.error("Error generating timetable:", error);
+      throw error;
+    }
   }
 );
 
 export const getSliitTimetables = createAsyncThunk(
   "timetable/getSliitTimetables",
   async () => {
-    const response = await api.get("/timetable/sliit/timetable_sliit");
+    // Fix the endpoint to match the backend route
+    const response = await api.get("/timetable/sliit/");
     return response.data;
   }
 );
 
 export const getTimetableHtmlUrl = (timetableId) => {
-  return `${api.defaults.baseURL}/timetable/sliit/html/${timetableId}`;
+  if (!timetableId) {
+    console.error("No timetable ID provided to getTimetableHtmlUrl");
+    return "";
+  }
+  // Ensure no double slashes by using URL constructor
+  const baseUrl = api.defaults.baseURL.endsWith('/') 
+    ? api.defaults.baseURL.slice(0, -1) 
+    : api.defaults.baseURL;
+  const url = `${baseUrl}/timetable/sliit/html/${timetableId}`;
+  console.log("Generated HTML URL:", url);
+  return url;
 };
 
 export const getTimetableStatsUrl = (timetableId) => {
-  return `${api.defaults.baseURL}/timetable/sliit/stats/${timetableId}`;
+  if (!timetableId) {
+    console.error("No timetable ID provided to getTimetableStatsUrl");
+    return "";
+  }
+  // Ensure no double slashes by using the same pattern
+  const baseUrl = api.defaults.baseURL.endsWith('/') 
+    ? api.defaults.baseURL.slice(0, -1) 
+    : api.defaults.baseURL;
+  const url = `${baseUrl}/timetable/sliit/stats/${timetableId}`;
+  console.log("Generated stats URL:", url);
+  return url;
 };
 
 export const getTimetableStats = createAsyncThunk(

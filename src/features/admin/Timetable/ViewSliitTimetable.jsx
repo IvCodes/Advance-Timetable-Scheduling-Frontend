@@ -1,15 +1,16 @@
 import React, { useEffect, useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
-import { Table, Spin, Button, Card, Space, Row, Col, Tabs, Typography, Descriptions, Badge, Tag, Divider, Statistic, message, Tooltip } from "antd";
+import { Table, Spin, Button, Card, Space, Row, Col, Tabs, Typography, Descriptions, Badge, Tag, Divider, Statistic, message, Tooltip, Modal, Form, Input, Select, InputNumber } from "antd";
 import { 
   FileTextOutlined, 
   BarChartOutlined, 
   CheckCircleOutlined, 
   ExperimentOutlined,
   ExportOutlined,
-  InfoCircleOutlined
+  InfoCircleOutlined,
+  PlusOutlined
 } from "@ant-design/icons";
-import { getSliitTimetables, getTimetableHtmlUrl, getTimetableStats } from "./timetable.api";
+import { getSliitTimetables, getTimetableHtmlUrl, getTimetableStats, generateSliitTimetable } from "./timetable.api";
 
 const { Title, Text } = Typography;
 
@@ -20,6 +21,9 @@ const ViewSliitTimetable = () => {
   const [selectedTimetable, setSelectedTimetable] = useState(null);
   const [stats, setStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(false);
+  const [isGenerateModalVisible, setIsGenerateModalVisible] = useState(false);
+  const [generationLoading, setGenerationLoading] = useState(false);
+  const [form] = Form.useForm();
 
   // Fetch all SLIIT timetables
   useEffect(() => {
@@ -27,6 +31,7 @@ const ViewSliitTimetable = () => {
       setLoading(true);
       try {
         const result = await dispatch(getSliitTimetables()).unwrap();
+        console.log("Fetched timetables:", result);
         setTimetables(result);
         
         // Select the first timetable by default if available
@@ -36,6 +41,7 @@ const ViewSliitTimetable = () => {
         }
       } catch (error) {
         console.error("Error fetching SLIIT timetables:", error);
+        message.error("Failed to fetch timetables");
       } finally {
         setLoading(false);
       }
@@ -51,6 +57,7 @@ const ViewSliitTimetable = () => {
     setStatsLoading(true);
     try {
       const result = await dispatch(getTimetableStats(timetableId)).unwrap();
+      console.log("Fetched stats:", result);
       setStats(result);
     } catch (error) {
       console.error(`Error fetching statistics for timetable with ID ${timetableId}:`, error);
@@ -68,7 +75,9 @@ const ViewSliitTimetable = () => {
 
   // Format the algorithm name for display
   const formatAlgorithmName = (algorithm) => {
-    switch (algorithm?.toLowerCase()) {
+    // Use optional chaining for better readability
+    const algorithmLower = algorithm?.toLowerCase();
+    switch (algorithmLower) {
       case "nsga2":
         return "NSGA-II (Non-dominated Sorting Genetic Algorithm II)";
       case "spea2":
@@ -82,24 +91,148 @@ const ViewSliitTimetable = () => {
 
   // Open timetable HTML in a new tab
   const viewTimetableHtml = (timetableId) => {
-    if (!timetableId) return;
+    if (!timetableId) {
+      message.error("No timetable ID provided");
+      return;
+    }
     
-    const htmlUrl = getTimetableHtmlUrl(timetableId);
-    window.open(htmlUrl, '_blank');
+    try {
+      const htmlUrl = getTimetableHtmlUrl(timetableId);
+      console.log("Opening HTML URL:", htmlUrl);
+      
+      // Show loading message
+      const loadingMessage = message.loading("Opening timetable view...", 0);
+      
+      // Create a hidden iframe to check if the URL is valid
+      const iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      iframe.onload = () => {
+        // Success - open in new tab
+        window.open(htmlUrl, '_blank');
+        loadingMessage();
+      };
+      iframe.onerror = () => {
+        // Error loading
+        loadingMessage();
+        message.error("Error loading timetable HTML. The server may have encountered an error.");
+      };
+      
+      // Set a timeout in case the load event doesn't fire
+      setTimeout(() => {
+        if (document.body.contains(iframe)) {
+          document.body.removeChild(iframe);
+          loadingMessage();
+          window.open(htmlUrl, '_blank');
+        }
+      }, 2000);
+      
+      // Add to document to start loading
+      document.body.appendChild(iframe);
+      iframe.src = htmlUrl;
+    } catch (error) {
+      console.error("Error opening timetable HTML:", error);
+      message.error("Failed to open timetable HTML view");
+    }
   };
 
-  // View detailed statistics in TimetableView component
-  const viewDetailedStats = (timetableId) => {
-    if (!timetableId) return;
+  // Get algorithm description
+  const getAlgorithmDescription = (algorithm) => {
+    if (!algorithm) return "No detailed information available.";
     
-    // Instead of redirecting to a non-existent route, use the existing stats panel
-    // Set the Tabs to show the metrics tab
-    message.info("Statistics are already shown in the Metrics tab below");
+    switch(algorithm.toLowerCase()) {
+      case "nsga2":
+        return "NSGA-II is a multi-objective optimization algorithm that uses a non-dominated sorting approach. It excels at finding a diverse set of Pareto-optimal solutions, making it effective for complex timetabling problems with competing objectives.";
+      case "spea2":
+        return "SPEA2 (Strength Pareto Evolutionary Algorithm 2) is a multi-objective optimization algorithm that incorporates a fine-grained fitness assignment strategy, a density estimation technique, and an enhanced archive truncation method to maintain diversity.";
+      case "moead":
+        return "MOEA/D (Multi-objective Evolutionary Algorithm Based on Decomposition) decomposes a multi-objective optimization problem into multiple single-objective subproblems and optimizes them simultaneously, which is particularly effective for problems with many objectives.";
+      default:
+        return "No detailed information available for this algorithm.";
+    }
+  };
+
+  // Show the generate modal
+  const showGenerateModal = () => {
+    setIsGenerateModalVisible(true);
+  };
+
+  // Handle the form submission for timetable generation
+  const handleGenerateSubmit = async (values) => {
+    try {
+      setGenerationLoading(true);
+      
+      // Prepare the parameters for the API call
+      const parameters = {
+        name: values.name,
+        algorithm: values.algorithm,
+        dataset: "sliit",
+        parameters: {
+          population: values.population,
+          generations: values.generations
+        }
+      };
+      
+      // Call the API to generate the timetable
+      console.log("Generating timetable with parameters:", parameters);
+      const result = await dispatch(generateSliitTimetable(parameters)).unwrap();
+      
+      // Refresh the timetable list
+      const updatedTimetables = await dispatch(getSliitTimetables()).unwrap();
+      setTimetables(updatedTimetables);
+      
+      // Select the newly generated timetable
+      if (result?._id) {
+        setSelectedTimetable(result);
+        fetchTimetableStats(result._id);
+      }
+      
+      // Close the modal and reset the form
+      setIsGenerateModalVisible(false);
+      form.resetFields();
+      
+      // Show success message
+      message.success(`Timetable "${values.name}" has been generated successfully using ${formatAlgorithmName(values.algorithm)}`);
+    } catch (error) {
+      console.error("Error generating timetable:", error);
+      message.error("Failed to generate timetable. Please try again.");
+    } finally {
+      setGenerationLoading(false);
+    }
+  };
+
+  // Handle modal cancel
+  const handleGenerateCancel = () => {
+    setIsGenerateModalVisible(false);
+    form.resetFields();
+  };
+
+  // Get algorithm options for the select dropdown
+  const getAlgorithmOptions = () => {
+    const algorithms = [
+      { value: 'nsga2', label: 'NSGA-II (Non-dominated Sorting Genetic Algorithm II)' },
+      { value: 'spea2', label: 'SPEA2 (Strength Pareto Evolutionary Algorithm 2)' },
+      { value: 'moead', label: 'MOEA/D (Multi-objective Evolutionary Algorithm Based on Decomposition)' }
+    ];
+    
+    return algorithms.map(algorithm => (
+      <Select.Option key={algorithm.value} value={algorithm.value}>
+        {algorithm.label}
+      </Select.Option>
+    ));
   };
 
   return (
     <div className="bg-white p-6 rounded-xl shadow-md max-w-6xl mx-auto">
-      <Title level={2}>SLIIT Timetables</Title>
+      <div className="flex justify-between items-center mb-4">
+        <Title level={2}>SLIIT Timetables</Title>
+        <Button 
+          type="primary" 
+          icon={<PlusOutlined />} 
+          onClick={showGenerateModal}
+        >
+          Generate New Timetable
+        </Button>
+      </div>
       <Divider />
 
       {loading ? (
@@ -271,15 +404,15 @@ const ViewSliitTimetable = () => {
                         
                         <Descriptions bordered column={2}>
                           <Descriptions.Item label="Hard Constraint Violations">
-                            <Badge status={selectedTimetable.metrics?.hardConstraintViolations > 0 ? "error" : "success"} />
-                            {selectedTimetable.metrics?.hardConstraintViolations || 0}
+                            <Badge status={stats.metrics?.hardConstraintViolations > 0 ? "error" : "success"} />
+                            {stats.metrics?.hardConstraintViolations || 0}
                           </Descriptions.Item>
                           <Descriptions.Item label="Soft Constraint Score">
-                            {selectedTimetable.metrics?.softConstraintScore?.toFixed(2) || 0}
+                            {stats.metrics?.softConstraintScore?.toFixed(2) || 0}
                           </Descriptions.Item>
                           <Descriptions.Item label="Unassigned Activities">
-                            <Badge status={selectedTimetable.metrics?.unassignedActivities > 0 ? "warning" : "success"} />
-                            {selectedTimetable.metrics?.unassignedActivities || 0}
+                            <Badge status={stats.metrics?.unassignedActivities > 0 ? "warning" : "success"} />
+                            {stats.metrics?.unassignedActivities || 0}
                           </Descriptions.Item>
                           <Descriptions.Item label="Execution Time">
                             {stats.stats?.execution_time ? `${stats.stats.execution_time.toFixed(2)} seconds` : "N/A"}
@@ -299,27 +432,7 @@ const ViewSliitTimetable = () => {
                         {formatAlgorithmName(selectedTimetable.algorithm)}
                       </Descriptions.Item>
                       <Descriptions.Item label="Description" span={3}>
-                        {selectedTimetable.algorithm?.toLowerCase() === "nsga2" ? (
-                          <Text>
-                            NSGA-II is a multi-objective optimization algorithm that uses a non-dominated sorting approach. 
-                            It excels at finding a diverse set of Pareto-optimal solutions, making it effective for complex 
-                            timetabling problems with competing objectives.
-                          </Text>
-                        ) : selectedTimetable.algorithm?.toLowerCase() === "spea2" ? (
-                          <Text>
-                            SPEA2 (Strength Pareto Evolutionary Algorithm 2) is a multi-objective optimization algorithm 
-                            that incorporates a fine-grained fitness assignment strategy, a density estimation technique, 
-                            and an enhanced archive truncation method to maintain diversity.
-                          </Text>
-                        ) : selectedTimetable.algorithm?.toLowerCase() === "moead" ? (
-                          <Text>
-                            MOEA/D (Multi-objective Evolutionary Algorithm Based on Decomposition) decomposes a multi-objective 
-                            optimization problem into multiple single-objective subproblems and optimizes them simultaneously, 
-                            which is particularly effective for problems with many objectives.
-                          </Text>
-                        ) : (
-                          <Text>No detailed information available for this algorithm.</Text>
-                        )}
+                        <Text>{getAlgorithmDescription(selectedTimetable.algorithm)}</Text>
                       </Descriptions.Item>
                       <Descriptions.Item label="Parameters" span={3}>
                         <div>
@@ -342,6 +455,90 @@ const ViewSliitTimetable = () => {
           </Col>
         </Row>
       )}
+
+      {/* Generate Timetable Modal */}
+      <Modal
+        title="Generate New SLIIT Timetable"
+        open={isGenerateModalVisible}
+        onCancel={handleGenerateCancel}
+        footer={null}
+        width={600}
+      >
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={handleGenerateSubmit}
+          initialValues={{
+            algorithm: "nsga2",
+            population: 100,
+            generations: 50
+          }}
+        >
+          <Form.Item
+            name="name"
+            label="Timetable Name"
+            rules={[{ required: true, message: "Please enter a name for the timetable" }]}
+          >
+            <Input placeholder="e.g., SLIIT Summer 2025 Timetable" />
+          </Form.Item>
+          
+          <Form.Item
+            name="algorithm"
+            label="Algorithm"
+            rules={[{ required: true, message: "Please select an algorithm" }]}
+          >
+            <Select>
+              {getAlgorithmOptions()}
+            </Select>
+          </Form.Item>
+          
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="population"
+                label="Population Size"
+                rules={[{ required: true, message: "Please enter population size" }]}
+              >
+                <InputNumber min={10} max={500} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="generations"
+                label="Number of Generations"
+                rules={[{ required: true, message: "Please enter number of generations" }]}
+              >
+                <InputNumber min={10} max={200} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+          </Row>
+          
+          <Form.Item>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <Button style={{ marginRight: 8 }} onClick={handleGenerateCancel}>
+                Cancel
+              </Button>
+              <Button type="primary" htmlType="submit" loading={generationLoading}>
+                Generate
+              </Button>
+            </div>
+          </Form.Item>
+          
+          <div style={{ marginTop: '16px' }}>
+            <Divider orientation="left">Algorithm Information</Divider>
+            <div style={{ backgroundColor: '#f5f5f5', padding: '16px', borderRadius: '8px' }}>
+              <Form.Item noStyle shouldUpdate>
+                {({ getFieldValue }) => {
+                  const algorithm = getFieldValue('algorithm');
+                  return (
+                    <Text>{getAlgorithmDescription(algorithm)}</Text>
+                  );
+                }}
+              </Form.Item>
+            </div>
+          </div>
+        </Form>
+      </Modal>
     </div>
   );
 };
