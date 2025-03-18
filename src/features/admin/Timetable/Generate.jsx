@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Button, Spin, notification, Progress, Badge, Divider } from "antd";
+import { Button, Spin, notification, Progress, Badge } from "antd";
 import { LoadingOutlined, CheckCircleFilled, CloseCircleFilled, InfoCircleFilled } from "@ant-design/icons";
 import { generateTimetable, setNotificationRead } from "./timetable.api";
 import { useDispatch, useSelector } from "react-redux";

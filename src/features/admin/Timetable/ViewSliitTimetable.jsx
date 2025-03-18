@@ -11,7 +11,6 @@ import {
   Tabs,
   Typography,
   Descriptions,
-  Badge,
   Tag,
   Divider,
   Statistic,
@@ -25,12 +24,14 @@ import {
 } from "antd";
 import {
   FileTextOutlined,
-  BarChartOutlined,
   CheckCircleOutlined,
   ExperimentOutlined,
   ExportOutlined,
   InfoCircleOutlined,
   PlusOutlined,
+  DownloadOutlined,
+  DownOutlined,
+  UpOutlined,
 } from "@ant-design/icons";
 import {
   getSliitTimetables,
@@ -114,6 +115,12 @@ const ViewSliitTimetable = () => {
         return "SPEA2 (Strength Pareto Evolutionary Algorithm 2)";
       case "moead":
         return "MOEA/D (Multi-objective Evolutionary Algorithm Based on Decomposition)";
+      case "dqn":
+        return "DQN (Deep Q-Network)";
+      case "sarsa":
+        return "SARSA (State-Action-Reward-State-Action)";
+      case "implicit_q":
+        return "Implicit Q-learning";
       default:
         return algorithm || "Unknown Algorithm";
     }
@@ -178,6 +185,12 @@ const ViewSliitTimetable = () => {
         return "SPEA2 (Strength Pareto Evolutionary Algorithm 2) is a multi-objective optimization algorithm that incorporates a fine-grained fitness assignment strategy, a density estimation technique, and an enhanced archive truncation method to maintain diversity.";
       case "moead":
         return "MOEA/D (Multi-objective Evolutionary Algorithm Based on Decomposition) decomposes a multi-objective optimization problem into multiple single-objective subproblems and optimizes them simultaneously, which is particularly effective for problems with many objectives.";
+      case "dqn":
+        return "DQN (Deep Q-Network) is a reinforcement learning algorithm that uses a neural network to approximate the Q-function, which estimates the expected return for each state-action pair.";
+      case "sarsa":
+        return "SARSA (State-Action-Reward-State-Action) is a reinforcement learning algorithm that updates the Q-function based on the current state, action, reward, and next state.";
+      case "implicit_q":
+        return "Implicit Q-learning is a reinforcement learning algorithm that updates the Q-function based on the current state and action, without explicitly computing the Q-function.";
       default:
         return "No detailed information available for this algorithm.";
     }
@@ -203,6 +216,9 @@ const ViewSliitTimetable = () => {
         parameters: {
           population: values.population,
           generations: values.generations,
+          learning_rate: values.learning_rate,
+          episodes: values.episodes,
+          epsilon: values.epsilon,
         },
       };
 
@@ -282,6 +298,18 @@ const ViewSliitTimetable = () => {
         value: "moead",
         label:
           "MOEA/D (Multi-objective Evolutionary Algorithm Based on Decomposition)",
+      },
+      {
+        value: "dqn",
+        label: "DQN (Deep Q-Network)",
+      },
+      {
+        value: "sarsa",
+        label: "SARSA (State-Action-Reward-State-Action)",
+      },
+      {
+        value: "implicit_q",
+        label: "Implicit Q-learning",
       },
     ];
 
@@ -446,6 +474,7 @@ const ViewSliitTimetable = () => {
                     ) : stats ? (
                       <div>
                         <Row gutter={[16, 16]}>
+                          {/* Commenting out these metrics since they don't have data yet
                           <Col span={12}>
                             <Card>
                               <Statistic
@@ -536,49 +565,84 @@ const ViewSliitTimetable = () => {
                               />
                             </Card>
                           </Col>
+                          */}
                         </Row>
 
-                        <Divider orientation="left">
-                          Constraint Violations
-                        </Divider>
+                        <Divider orientation="left">Constraint Details</Divider>
+                        <Row gutter={[16, 16]}>
+                          <Col span={8}>
+                            <Card>
+                              <Statistic
+                                title="Hard Constraint Violations"
+                                value={stats.basic?.hardConstraintViolations || 0}
+                                valueStyle={{
+                                  color:
+                                    (stats.basic?.hardConstraintViolations || 0) === 0
+                                      ? "#3f8600"
+                                      : "#cf1322",
+                                }}
+                              />
+                            </Card>
+                          </Col>
+                          <Col span={8}>
+                            <Card>
+                              <Statistic
+                                title="Soft Constraint Score"
+                                value={stats.basic?.softConstraintScore?.toFixed(4) || 0}
+                                precision={4}
+                                valueStyle={{
+                                  color: 
+                                    (stats.basic?.softConstraintScore || 0) > 0.5 
+                                      ? "#3f8600" 
+                                      : (stats.basic?.softConstraintScore || 0) > 0 
+                                      ? "#faad14" 
+                                      : "#cf1322",
+                                }}
+                              />
+                            </Card>
+                          </Col>
+                          <Col span={8}>
+                            <Card>
+                              <Statistic
+                                title="Unassigned Activities"
+                                value={stats.basic?.unassignedActivities || 0}
+                                valueStyle={{
+                                  color:
+                                    (stats.basic?.unassignedActivities || 0) === 0
+                                      ? "#3f8600"
+                                      : "#cf1322",
+                                }}
+                              />
+                            </Card>
+                          </Col>
+                        </Row>
 
-                        <Descriptions bordered column={2}>
-                          <Descriptions.Item label="Hard Constraint Violations">
-                            <Badge
-                              status={
-                                stats.metrics?.hardConstraintViolations > 0
-                                  ? "error"
-                                  : "success"
-                              }
-                            />
-                            {stats.metrics?.hardConstraintViolations || 0}
+                        <Divider orientation="left">Algorithm</Divider>
+                        <Descriptions bordered>
+                          <Descriptions.Item label="Algorithm Name">
+                            {formatAlgorithmName(stats.algorithm?.name)}
                           </Descriptions.Item>
-                          <Descriptions.Item label="Soft Constraint Score">
-                            {stats.metrics?.softConstraintScore?.toFixed(2) ||
-                              0}
+                          <Descriptions.Item label="Population Size">
+                            {stats.algorithm?.parameters?.population || 'N/A'}
                           </Descriptions.Item>
-                          <Descriptions.Item label="Unassigned Activities">
-                            <Badge
-                              status={
-                                stats.metrics?.unassignedActivities > 0
-                                  ? "warning"
-                                  : "success"
-                              }
-                            />
-                            {stats.metrics?.unassignedActivities || 0}
+                          <Descriptions.Item label="Generations">
+                            {stats.algorithm?.parameters?.generations || 'N/A'}
                           </Descriptions.Item>
                           <Descriptions.Item label="Execution Time">
-                            {stats.stats?.execution_time
-                              ? `${stats.stats.execution_time.toFixed(2)} seconds`
+                            {stats.algorithm?.runTime 
+                              ? `${stats.algorithm.runTime.toFixed(2)} seconds` 
+                              : "N/A"}
+                          </Descriptions.Item>
+                          <Descriptions.Item label="Created At">
+                            {stats.timetable?.createdAt
+                              ? new Date(stats.timetable.createdAt).toLocaleDateString()
                               : "N/A"}
                           </Descriptions.Item>
                         </Descriptions>
                       </div>
                     ) : (
-                      <div style={{ textAlign: "center", padding: "40px 0" }}>
-                        <Text type="secondary">
-                          No metrics available for this timetable.
-                        </Text>
+                      <div style={{ textAlign: "center" }}>
+                        <Text type="secondary">No metrics available</Text>
                       </div>
                     )}
                   </Tabs.TabPane>
@@ -665,33 +729,92 @@ const ViewSliitTimetable = () => {
             <Select>{getAlgorithmOptions()}</Select>
           </Form.Item>
 
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                name="population"
-                label="Population Size"
-                rules={[
-                  { required: true, message: "Please enter population size" },
-                ]}
-              >
-                <InputNumber min={10} max={500} style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item
-                name="generations"
-                label="Number of Generations"
-                rules={[
-                  {
-                    required: true,
-                    message: "Please enter number of generations",
-                  },
-                ]}
-              >
-                <InputNumber min={10} max={200} style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
-          </Row>
+          <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => prevValues.algorithm !== currentValues.algorithm}>
+            {({ getFieldValue }) => {
+              const algorithm = getFieldValue('algorithm');
+              const isRLAlgorithm = ['dqn', 'sarsa', 'implicit_q'].includes(algorithm);
+              
+              if (isRLAlgorithm) {
+                return (
+                  <Row gutter={16}>
+                    <Col span={8}>
+                      <Form.Item
+                        name="learning_rate"
+                        label="Learning Rate"
+                        initialValue={0.001}
+                        rules={[
+                          { required: true, message: "Please enter learning rate" },
+                        ]}
+                      >
+                        <InputNumber min={0.0001} max={1} step={0.001} style={{ width: "100%" }} />
+                      </Form.Item>
+                    </Col>
+                    <Col span={8}>
+                      <Form.Item
+                        name="episodes"
+                        label="Episodes"
+                        initialValue={100}
+                        rules={[
+                          {
+                            required: true,
+                            message: "Please enter number of episodes",
+                          },
+                        ]}
+                      >
+                        <InputNumber min={10} max={500} style={{ width: "100%" }} />
+                      </Form.Item>
+                    </Col>
+                    <Col span={8}>
+                      <Form.Item
+                        name="epsilon"
+                        label="Epsilon (Exploration Rate)"
+                        initialValue={0.1}
+                        rules={[
+                          {
+                            required: true,
+                            message: "Please enter epsilon value",
+                          },
+                        ]}
+                      >
+                        <InputNumber min={0.01} max={1} step={0.01} style={{ width: "100%" }} />
+                      </Form.Item>
+                    </Col>
+                  </Row>
+                );
+              }
+              
+              // Default params for evolutionary algorithms
+              return (
+                <Row gutter={16}>
+                  <Col span={12}>
+                    <Form.Item
+                      name="population"
+                      label="Population Size"
+                      rules={[
+                        { required: true, message: "Please enter population size" },
+                      ]}
+                    >
+                      <InputNumber min={10} max={500} style={{ width: "100%" }} />
+                    </Form.Item>
+                  </Col>
+                  <Col span={12}>
+                    <Form.Item
+                      name="generations"
+                      label="Number of Generations"
+                      rules={[
+                        {
+                          required: true,
+                          message: "Please enter number of generations",
+                        },
+                      ]}
+                    >
+                      <InputNumber min={10} max={200} style={{ width: "100%" }} />
+                    </Form.Item>
+                  </Col>
+                </Row>
+              );
+            }}
+          </Form.Item>
 
           <Form.Item>
             <div style={{ display: "flex", justifyContent: "flex-end" }}>

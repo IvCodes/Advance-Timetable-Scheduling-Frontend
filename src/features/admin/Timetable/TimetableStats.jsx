@@ -4,25 +4,28 @@ import {
   Card, 
   Row, 
   Col, 
-  Spin, 
-  Descriptions, 
-  Typography, 
+  Statistic, 
+  Tabs, 
   Table, 
-  Divider, 
-  Tabs,
-  Statistic
+  Descriptions,
+  Typography,
+  Divider,
+  Spin,
+  Tag,
+  Alert
 } from "antd";
-import { 
-  LineChartOutlined, 
-  BarChartOutlined,
-  InfoCircleOutlined,
+import {
   CheckCircleOutlined,
+  CloseCircleOutlined,
+  WarningOutlined,
+  InfoCircleOutlined,
+  BarChartOutlined,
   ClockCircleOutlined
 } from "@ant-design/icons";
 import { getTimetableStats } from "./timetable.api";
 
-const { Title, Text } = Typography;
 const { TabPane } = Tabs;
+const { Text } = Typography;
 
 const TimetableStats = ({ timetableId }) => {
   const dispatch = useDispatch();
@@ -82,7 +85,8 @@ const TimetableStats = ({ timetableId }) => {
 
   // Format algorithm name for display
   const formatAlgorithmName = (algorithm) => {
-    switch (algorithm?.toLowerCase()) {
+    const algorithmLower = algorithm?.toLowerCase();
+    switch (algorithmLower) {
       case "nsga2":
         return "NSGA-II (Non-dominated Sorting Genetic Algorithm II)";
       case "spea2":
@@ -94,125 +98,220 @@ const TimetableStats = ({ timetableId }) => {
     }
   };
 
+  // Format date to show only year, month, and date
+  const formatDate = (dateString) => {
+    if (!dateString) return "N/A";
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString();
+    } catch (e) {
+      console.error("Error formatting date:", e);
+      return dateString;
+    }
+  };
+
+  // Default metrics values if they're not available
+  const roomUtilization = stats.metrics?.room_utilization?.toFixed(2) || "N/A";
+  const teacherSatisfaction = stats.metrics?.teacher_satisfaction?.toFixed(2) || "N/A";
+  const studentSatisfaction = stats.metrics?.student_satisfaction?.toFixed(2) || "N/A";
+  const timeEfficiency = stats.metrics?.time_efficiency?.toFixed(2) || "N/A";
+
+  // Constraint metrics directly from timetable data
+  const hardViolations = stats.basic?.hardConstraintViolations || 0;
+  const softScore = stats.basic?.softConstraintScore?.toFixed(4) || 0;
+  const unassignedActivities = stats.basic?.unassignedActivities || 0;
+
+  // Calculate execution time display
+  const executionTime = stats.algorithm?.runTime 
+    ? `${stats.algorithm.runTime.toFixed(2)} seconds` 
+    : "N/A";
+
+  // Create detailed constraints data for the table
+  const constraintData = [
+    {
+      key: '1',
+      type: 'Hard Constraint Violations',
+      value: hardViolations,
+      status: hardViolations === 0 ? 'success' : 'error'
+    },
+    {
+      key: '2',
+      type: 'Soft Constraint Score',
+      value: softScore,
+      status: parseFloat(softScore) >= 0.5 ? 'success' : parseFloat(softScore) > 0 ? 'warning' : 'error'
+    },
+    {
+      key: '3',
+      type: 'Unassigned Activities',
+      value: unassignedActivities,
+      status: unassignedActivities === 0 ? 'success' : 'error'
+    }
+  ];
+
+  const constraintColumns = [
+    {
+      title: 'Constraint Type',
+      dataIndex: 'type',
+      key: 'type',
+    },
+    {
+      title: 'Value',
+      dataIndex: 'value',
+      key: 'value',
+    },
+    {
+      title: 'Status',
+      dataIndex: 'status',
+      key: 'status',
+      render: (status) => {
+        let color = 'green';
+        let icon = <CheckCircleOutlined />;
+        
+        if (status === 'warning') {
+          color = 'orange';
+          icon = <WarningOutlined />;
+        } else if (status === 'error') {
+          color = 'red';
+          icon = <CloseCircleOutlined />;
+        }
+        
+        return <Tag color={color} icon={icon}>{status.toUpperCase()}</Tag>;
+      },
+    },
+  ];
+
   return (
-    <div className="timetable-stats-container">
-      <Card title={<Title level={4}>Timetable Optimization Statistics</Title>} bordered={false}>
-        <Tabs defaultActiveKey="overview">
-          <TabPane 
-            tab={<span><InfoCircleOutlined /> Overview</span>} 
-            key="overview"
-          >
-            <Descriptions title="Algorithm Information" bordered column={2}>
-              <Descriptions.Item label="Algorithm">
-                {formatAlgorithmName(stats.algorithm)}
+    <div className="timetable-stats">
+      <Tabs defaultActiveKey="overview" style={{ marginBottom: 24 }}>
+        <TabPane 
+          tab={<span><InfoCircleOutlined /> Overview</span>} 
+          key="overview"
+        >
+          <Descriptions title="Algorithm Information" bordered column={2}>
+            <Descriptions.Item label="Algorithm">
+              {formatAlgorithmName(stats.algorithm?.name)}
+            </Descriptions.Item>
+            <Descriptions.Item label="Population Size">
+              {stats.algorithm?.parameters?.population || "N/A"}
+            </Descriptions.Item>
+            <Descriptions.Item label="Number of Generations">
+              {stats.algorithm?.parameters?.generations || "N/A"}
+            </Descriptions.Item>
+            <Descriptions.Item label="Execution Time">
+              {executionTime}
+            </Descriptions.Item>
+            <Descriptions.Item label="Dataset">
+              {stats.timetable?.dataset || "SLIIT"}
+            </Descriptions.Item>
+            <Descriptions.Item label="Created Date">
+              {formatDate(stats.timetable?.createdAt)}
+            </Descriptions.Item>
+          </Descriptions>
+          
+          <Divider orientation="left">Performance Metrics</Divider>
+          
+          <Row gutter={[16, 16]}>
+            {/* Commenting out these metrics since they don't have data yet
+            <Col xs={24} sm={12} md={8} lg={6}>
+              <Card>
+                <Statistic 
+                  title="Room Utilization" 
+                  value={roomUtilization} 
+                  suffix="%" 
+                  prefix={<BarChartOutlined />}
+                  valueStyle={{ color: '#3f8600' }}
+                />
+              </Card>
+            </Col>
+            <Col xs={24} sm={12} md={8} lg={6}>
+              <Card>
+                <Statistic 
+                  title="Teacher Satisfaction" 
+                  value={teacherSatisfaction} 
+                  suffix="%" 
+                  prefix={<CheckCircleOutlined />}
+                  valueStyle={{ color: '#1890ff' }}
+                />
+              </Card>
+            </Col>
+            <Col xs={24} sm={12} md={8} lg={6}>
+              <Card>
+                <Statistic 
+                  title="Student Satisfaction" 
+                  value={studentSatisfaction} 
+                  suffix="%" 
+                  prefix={<CheckCircleOutlined />}
+                  valueStyle={{ color: '#1890ff' }}
+                />
+              </Card>
+            </Col>
+            <Col xs={24} sm={12} md={8} lg={6}>
+              <Card>
+                <Statistic 
+                  title="Time Efficiency" 
+                  value={timeEfficiency} 
+                  suffix="%" 
+                  prefix={<ClockCircleOutlined />}
+                  valueStyle={{ color: '#3f8600' }}
+                />
+              </Card>
+            </Col>
+            */}
+            <Col span={24}>
+              <Alert 
+                message="Additional Metrics Coming Soon"
+                description="Room utilization, satisfaction ratings, and time efficiency metrics are in development and will be available in future versions."
+                type="info"
+                showIcon
+              />
+            </Col>
+          </Row>
+          
+          <Divider orientation="left">Constraint Analysis</Divider>
+          
+          <Table 
+            dataSource={constraintData} 
+            columns={constraintColumns} 
+            pagination={false}
+            bordered
+          />
+          
+          {hardViolations > 0 && (
+            <Alert
+              message="Hard Constraints Violated"
+              description="This timetable contains hard constraint violations which should be resolved for a valid schedule."
+              type="error"
+              showIcon
+              style={{ marginTop: 16 }}
+            />
+          )}
+        </TabPane>
+        
+        <TabPane 
+          tab={<span><BarChartOutlined /> Detailed Metrics</span>} 
+          key="metrics"
+        >
+          <Card title="Detailed Constraint Violations" bordered={false}>
+            <Descriptions bordered column={1}>
+              <Descriptions.Item label="Room Conflicts">
+                {stats.detailed?.hard_constraints?.room_conflicts || 0}
               </Descriptions.Item>
-              <Descriptions.Item label="Population Size">
-                {stats.parameters?.population || "N/A"}
+              <Descriptions.Item label="Time Conflicts">
+                {stats.detailed?.hard_constraints?.time_conflicts || 0}
               </Descriptions.Item>
-              <Descriptions.Item label="Number of Generations">
-                {stats.parameters?.generations || "N/A"}
+              <Descriptions.Item label="Distribution Conflicts">
+                {stats.detailed?.hard_constraints?.distribution_conflicts || 0}
               </Descriptions.Item>
-              <Descriptions.Item label="Execution Time">
-                {stats.stats?.execution_time ? `${stats.stats.execution_time.toFixed(2)} seconds` : "N/A"}
+              <Descriptions.Item label="Student Conflicts">
+                {stats.detailed?.hard_constraints?.student_conflicts || 0}
+              </Descriptions.Item>
+              <Descriptions.Item label="Capacity Violations">
+                {stats.detailed?.hard_constraints?.capacity_violations || 0}
               </Descriptions.Item>
             </Descriptions>
-            
-            <Divider orientation="left">Performance Metrics</Divider>
-            
-            <Row gutter={[16, 16]}>
-              <Col xs={24} sm={12} md={8} lg={6}>
-                <Card>
-                  <Statistic 
-                    title="Room Utilization" 
-                    value={stats.metrics?.room_utilization?.toFixed(2) || "N/A"} 
-                    suffix="%" 
-                    prefix={<BarChartOutlined />}
-                    valueStyle={{ color: '#3f8600' }}
-                  />
-                </Card>
-              </Col>
-              <Col xs={24} sm={12} md={8} lg={6}>
-                <Card>
-                  <Statistic 
-                    title="Teacher Satisfaction" 
-                    value={stats.metrics?.teacher_satisfaction?.toFixed(2) || "N/A"} 
-                    suffix="%" 
-                    prefix={<CheckCircleOutlined />}
-                    valueStyle={{ color: '#1890ff' }}
-                  />
-                </Card>
-              </Col>
-              <Col xs={24} sm={12} md={8} lg={6}>
-                <Card>
-                  <Statistic 
-                    title="Student Satisfaction" 
-                    value={stats.metrics?.student_satisfaction?.toFixed(2) || "N/A"} 
-                    suffix="%" 
-                    prefix={<CheckCircleOutlined />}
-                    valueStyle={{ color: '#1890ff' }}
-                  />
-                </Card>
-              </Col>
-              <Col xs={24} sm={12} md={8} lg={6}>
-                <Card>
-                  <Statistic 
-                    title="Time Slot Efficiency" 
-                    value={stats.metrics?.time_efficiency?.toFixed(2) || "N/A"} 
-                    suffix="%" 
-                    prefix={<ClockCircleOutlined />}
-                    valueStyle={{ color: '#722ed1' }}
-                  />
-                </Card>
-              </Col>
-            </Row>
-          </TabPane>
-          
-          <TabPane 
-            tab={<span><LineChartOutlined /> Detailed Metrics</span>} 
-            key="detailed"
-          >
-            <Card title="Optimization Details">
-              {stats.stats?.convergence_history ? (
-                <div>
-                  <Title level={5}>Convergence History</Title>
-                  <Text>
-                    The algorithm ran for {stats.stats.convergence_history.length} generations and 
-                    achieved a final fitness score of {stats.stats.convergence_history[stats.stats.convergence_history.length - 1]?.toFixed(4) || "N/A"}.
-                  </Text>
-                  
-                  {/* You could add a chart here to visualize the convergence history */}
-                  
-                  <Divider />
-                  
-                  <Table 
-                    dataSource={stats.stats.convergence_history.map((value, index) => ({
-                      key: index,
-                      generation: index + 1,
-                      fitness: value.toFixed(4)
-                    }))}
-                    columns={[
-                      {
-                        title: 'Generation',
-                        dataIndex: 'generation',
-                        key: 'generation',
-                      },
-                      {
-                        title: 'Fitness Score',
-                        dataIndex: 'fitness',
-                        key: 'fitness',
-                      }
-                    ]}
-                    pagination={{ pageSize: 10 }}
-                    scroll={{ y: 300 }}
-                  />
-                </div>
-              ) : (
-                <Text>No detailed convergence data available.</Text>
-              )}
-            </Card>
-          </TabPane>
-        </Tabs>
-      </Card>
+          </Card>
+        </TabPane>
+      </Tabs>
     </div>
   );
 };
