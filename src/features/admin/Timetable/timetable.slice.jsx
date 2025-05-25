@@ -13,6 +13,7 @@ import {
   updateTimetableEntry,
   assignSubstitute,
   removeSubstitute,
+  checkGenerationStatus,
 } from "./timetable.api";
 
 const initialState = {
@@ -20,6 +21,9 @@ const initialState = {
   evaluation: null,
   loading: false,
   generating: false,
+  generationStarted: false,
+  generationCompleted: false,
+  generationStatus: null,
   error: null,
   llmResponse: null,
   selectedAlgorithm: null,
@@ -49,6 +53,15 @@ const timetableSlice = createSlice({
     setGenerating: (state, action) => {
       state.generating = action.payload;
     },
+    setGenerationStarted: (state, action) => {
+      state.generationStarted = action.payload;
+    },
+    setGenerationCompleted: (state, action) => {
+      state.generationCompleted = action.payload;
+    },
+    setGenerationStatus: (state, action) => {
+      state.generationStatus = action.payload;
+    },
     clearUpdateEntrySuccess: (state) => {
       state.updateEntrySuccess = null;
     },
@@ -57,12 +70,19 @@ const timetableSlice = createSlice({
     builder
       .addCase(generateTimetable.pending, (state) => {
         state.generating = true;
+        state.generationStarted = true;
+        state.generationCompleted = false;
+        state.generationStatus = null;
       })
       .addCase(generateTimetable.fulfilled, (state, action) => {
         // Leave generating state as true - it will be set to false via SSE
+        state.generationCompleted = true;
+        state.generationStatus = 'success';
       })
       .addCase(generateTimetable.rejected, (state, action) => {
         state.generating = false;
+        state.generationCompleted = true;
+        state.generationStatus = 'failed';
         state.error = action.payload;
       })
       .addCase(getTimetable.pending, (state) => {
@@ -230,6 +250,25 @@ const timetableSlice = createSlice({
         state.substituteLoading = false;
         state.error = action.payload;
         state.updateEntrySuccess = null;
+      })
+      // Handle the checkGenerationStatus thunk
+      .addCase(checkGenerationStatus.pending, (state) => {
+        // No state change needed
+      })
+      .addCase(checkGenerationStatus.fulfilled, (state, action) => {
+        // Update the generation status based on the response
+        state.generationStatus = action.payload;
+        
+        if (action.payload.completed) {
+          state.generationCompleted = true;
+          state.generating = false;
+        } else if (action.payload.in_progress) {
+          state.generationStarted = true;
+          state.generating = true;
+        }
+      })
+      .addCase(checkGenerationStatus.rejected, (state, action) => {
+        state.error = action.payload;
       });
   },
 });
@@ -239,6 +278,9 @@ export const {
   setLoading, 
   setError, 
   setGenerating,
+  setGenerationStarted,
+  setGenerationCompleted,
+  setGenerationStatus,
   clearUpdateEntrySuccess
 } = timetableSlice.actions;
 

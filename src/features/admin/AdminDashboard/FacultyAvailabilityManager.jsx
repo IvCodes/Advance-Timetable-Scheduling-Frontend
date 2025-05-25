@@ -33,58 +33,49 @@ const { TextArea } = Input;
 const { TabPane } = Tabs;
 const { Option } = Select;
 
-// API function to get unavailable days for all faculty
+// API function to get faculty unavailability requests
 const getFacultyUnavailableDays = async (facultyId = null) => {
   try {
-    // Mock data - in a real app, this would be an API call
-    // If facultyId is null, return all faculty unavailable days
-    return [
-      {
-        facultyId: 'FA0000001',
-        facultyName: 'John Doe',
-        department: 'Computer Science',
-        unavailableDates: [
-          {
-            date: '2025-03-15',
-            reason: 'Medical appointment',
-            substituteId: null,
-            status: 'pending' // pending, approved, denied
-          },
-          {
-            date: '2025-03-20',
-            reason: 'Conference attendance',
-            substituteId: 'FA0000002',
-            status: 'approved'
-          }
-        ]
-      },
-      {
-        facultyId: 'FA0000002',
-        facultyName: 'Jane Smith',
-        department: 'Mathematics',
-        unavailableDates: [
-          {
-            date: '2025-03-22',
-            reason: 'Family emergency',
-            substituteId: null,
-            status: 'pending'
-          }
-        ]
-      },
-      {
-        facultyId: 'FA0000003',
-        facultyName: 'Robert Johnson',
-        department: 'Physics',
-        unavailableDates: [
-          {
-            date: '2025-03-18',
-            reason: 'Research presentation',
-            substituteId: 'FA0000001',
-            status: 'approved'
-          }
-        ]
+    const api = makeApi();
+    
+    // Get all unavailability requests
+    const response = await api.get('/faculty-availability/unavailability-requests');
+    const requests = response.data;
+    
+    // Group requests by faculty
+    const facultyMap = {};
+    
+    for (const request of requests) {
+      const { faculty_id, faculty_name, department, date, reason, status, substitute_id, substitute_name, unavailability_type } = request;
+      
+      if (!facultyMap[faculty_id]) {
+        facultyMap[faculty_id] = {
+          facultyId: faculty_id,
+          facultyName: faculty_name,
+          department: department,
+          unavailableDates: []
+        };
       }
-    ];
+      
+      facultyMap[faculty_id].unavailableDates.push({
+        date: date,
+        reason: reason,
+        substituteId: substitute_id,
+        substituteName: substitute_name,
+        status: status,
+        type: unavailability_type
+      });
+    }
+    
+    // Convert to array format
+    const facultyArray = Object.values(facultyMap);
+    
+    // If specific faculty requested, filter
+    if (facultyId) {
+      return facultyArray.filter(faculty => faculty.facultyId === facultyId);
+    }
+    
+    return facultyArray;
   } catch (error) {
     console.error("Error fetching faculty unavailable days:", error);
     return [];
@@ -92,11 +83,15 @@ const getFacultyUnavailableDays = async (facultyId = null) => {
 };
 
 // API function to assign a substitute for a faculty member
-const assignSubstitute = async (facultyId, date, substituteId) => {
+const assignSubstitute = async (requestId, substituteId, adminNotes = null) => {
   try {
-    // Mock API call
-    console.log(`Assigning substitute ${substituteId} for faculty ${facultyId} on ${date}`);
-    return { success: true };
+    const api = makeApi();
+    const response = await api.put(`/faculty-availability/unavailability-requests/${requestId}/status`, {
+      status: 'approved',
+      substitute_id: substituteId,
+      admin_notes: adminNotes
+    });
+    return { success: true, data: response.data };
   } catch (error) {
     console.error("Error assigning substitute:", error);
     return { success: false, error: error.message };
@@ -104,14 +99,29 @@ const assignSubstitute = async (facultyId, date, substituteId) => {
 };
 
 // API function to update availability request status
-const updateAvailabilityRequestStatus = async (facultyId, date, status) => {
+const updateAvailabilityRequestStatus = async (requestId, status, adminNotes = null) => {
   try {
-    // Mock API call
-    console.log(`Updating status to ${status} for faculty ${facultyId} on ${date}`);
-    return { success: true };
+    const api = makeApi();
+    const response = await api.put(`/faculty-availability/unavailability-requests/${requestId}/status`, {
+      status: status,
+      admin_notes: adminNotes
+    });
+    return { success: true, data: response.data };
   } catch (error) {
     console.error("Error updating availability status:", error);
     return { success: false, error: error.message };
+  }
+};
+
+// API function to get pending requests
+const getPendingRequests = async () => {
+  try {
+    const api = makeApi();
+    const response = await api.get('/faculty-availability/unavailability-requests/pending');
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching pending requests:", error);
+    return [];
   }
 };
 
@@ -124,6 +134,7 @@ const FacultyAvailabilityManager = () => {
   const [unavailableDays, setUnavailableDays] = useState([]);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [pendingRequests, setPendingRequests] = useState([]);
+  const [allRequests, setAllRequests] = useState([]);
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [substituteModalVisible, setSubstituteModalVisible] = useState(false);
   const [loadingData, setLoadingData] = useState(false);
@@ -136,49 +147,70 @@ const FacultyAvailabilityManager = () => {
     dispatch(getTeachers());
   }, [dispatch]);
   
-  // Fetch faculty unavailable days
-  useEffect(() => {
-    const fetchFacultyData = async () => {
-      setLoadingData(true);
-      try {
-        const data = await getFacultyUnavailableDays();
-        setFacultyData(data);
-        
-        // Extract all pending requests
-        const pending = data.reduce((acc, faculty) => {
-          const facultyPending = faculty.unavailableDates
-            .filter(date => date.status === 'pending')
-            .map(date => ({
-              key: `${faculty.facultyId}-${date.date}`,
-              facultyId: faculty.facultyId,
-              facultyName: faculty.facultyName,
-              department: faculty.department,
-              date: date.date,
-              reason: date.reason,
-              substituteId: date.substituteId,
-              status: date.status
-            }));
-          return [...acc, ...facultyPending];
-        }, []);
-        
-        setPendingRequests(pending);
-        
-        // If a faculty is selected, filter their unavailable days
-        if (selectedFaculty) {
-          const faculty = data.find(f => f.facultyId === selectedFaculty);
-          if (faculty) {
-            setUnavailableDays(faculty.unavailableDates);
-          }
+  // Function to fetch all data
+  const fetchAllData = async () => {
+    setLoadingData(true);
+    try {
+      // Fetch all faculty data
+      const data = await getFacultyUnavailableDays();
+      setFacultyData(data);
+      
+      // Fetch pending requests directly from API
+      const pendingData = await getPendingRequests();
+      const formattedPending = pendingData.map(request => ({
+        key: request.record_id,
+        requestId: request.record_id,
+        facultyId: request.faculty_id,
+        facultyName: request.faculty_name,
+        department: request.department,
+        date: request.date,
+        reason: request.reason,
+        substituteId: request.substitute_id,
+        status: request.status,
+        type: request.unavailability_type,
+        createdAt: request.created_at
+      }));
+      
+      setPendingRequests(formattedPending);
+      
+      // Fetch all requests for the "All Requests" tab
+      const api = makeApi();
+      const allRequestsResponse = await api.get('/faculty-availability/unavailability-requests');
+      const formattedAll = allRequestsResponse.data.map(request => ({
+        key: request.record_id,
+        requestId: request.record_id,
+        facultyId: request.faculty_id,
+        facultyName: request.faculty_name,
+        department: request.department,
+        date: request.date,
+        reason: request.reason,
+        substituteId: request.substitute_id,
+        substituteName: request.substitute_name,
+        status: request.status,
+        type: request.unavailability_type,
+        createdAt: request.created_at
+      }));
+      
+      setAllRequests(formattedAll);
+      
+      // If a faculty is selected, filter their unavailable days
+      if (selectedFaculty) {
+        const faculty = data.find(f => f.facultyId === selectedFaculty);
+        if (faculty) {
+          setUnavailableDays(faculty.unavailableDates);
         }
-      } catch (error) {
-        console.error("Error fetching faculty data:", error);
-        message.error("Failed to load faculty availability data");
-      } finally {
-        setLoadingData(false);
       }
-    };
-    
-    fetchFacultyData();
+    } catch (error) {
+      console.error("Error fetching faculty data:", error);
+      message.error("Failed to load faculty availability data");
+    } finally {
+      setLoadingData(false);
+    }
+  };
+
+  // Fetch faculty unavailable days and pending requests
+  useEffect(() => {
+    fetchAllData();
   }, [selectedFaculty]);
   
   // Handle faculty selection change
@@ -273,7 +305,7 @@ const FacultyAvailabilityManager = () => {
   const handleApproveRequest = async () => {
     if (!selectedRequest) return;
     
-    const { facultyId, date } = selectedRequest;
+    const { requestId, facultyId, date } = selectedRequest;
     
     // If no substitute is assigned, show the substitute assignment modal
     if (!selectedRequest.substituteId) {
@@ -283,13 +315,14 @@ const FacultyAvailabilityManager = () => {
     
     try {
       // Update the status to approved
-      const result = await updateAvailabilityRequestStatus(facultyId, date, 'approved');
+      const result = await updateAvailabilityRequestStatus(requestId, 'approved');
       
       if (result.success) {
-        // Update the local state
-        updateRequestStatus(facultyId, date, 'approved');
         message.success("Request approved successfully");
         setIsModalVisible(false);
+        
+        // Refresh all data
+        await fetchAllData();
       } else {
         message.error("Failed to approve request");
       }
@@ -303,17 +336,18 @@ const FacultyAvailabilityManager = () => {
   const handleDenyRequest = async () => {
     if (!selectedRequest) return;
     
-    const { facultyId, date } = selectedRequest;
+    const { requestId, facultyId, date } = selectedRequest;
     
     try {
       // Update the status to denied
-      const result = await updateAvailabilityRequestStatus(facultyId, date, 'denied');
+      const result = await updateAvailabilityRequestStatus(requestId, 'denied');
       
       if (result.success) {
-        // Update the local state
-        updateRequestStatus(facultyId, date, 'denied');
         message.success("Request denied");
         setIsModalVisible(false);
+        
+        // Refresh all data
+        await fetchAllData();
       } else {
         message.error("Failed to deny request");
       }
@@ -327,26 +361,20 @@ const FacultyAvailabilityManager = () => {
   const handleAssignSubstitute = async (values) => {
     if (!selectedRequest) return;
     
-    const { facultyId, date } = selectedRequest;
+    const { requestId, facultyId, date } = selectedRequest;
     const { substituteId } = values;
     
     try {
-      // Assign the substitute
-      const assignResult = await assignSubstitute(facultyId, date, substituteId);
+      // Assign the substitute and approve the request in one call
+      const result = await assignSubstitute(requestId, substituteId, "Substitute assigned by admin");
       
-      if (assignResult.success) {
-        // Update the status to approved
-        const statusResult = await updateAvailabilityRequestStatus(facultyId, date, 'approved');
+      if (result.success) {
+        message.success("Substitute assigned and request approved");
+        setSubstituteModalVisible(false);
+        setIsModalVisible(false);
         
-        if (statusResult.success) {
-          // Update the local state
-          updateRequestWithSubstitute(facultyId, date, substituteId, 'approved');
-          message.success("Substitute assigned and request approved");
-          setSubstituteModalVisible(false);
-          setIsModalVisible(false);
-        } else {
-          message.error("Substitute assigned but failed to approve request");
-        }
+        // Refresh all data
+        await fetchAllData();
       } else {
         message.error("Failed to assign substitute");
       }
@@ -477,16 +505,79 @@ const FacultyAvailabilityManager = () => {
     },
   ];
 
+  // Table columns for all requests
+  const allRequestsColumns = [
+    {
+      title: 'Faculty',
+      dataIndex: 'facultyName',
+      key: 'facultyName',
+    },
+    {
+      title: 'Department',
+      dataIndex: 'department',
+      key: 'department',
+    },
+    {
+      title: 'Date',
+      dataIndex: 'date',
+      key: 'date',
+      render: (text) => dayjs(text).format('MMMM D, YYYY (dddd)'),
+      sorter: (a, b) => dayjs(a.date).unix() - dayjs(b.date).unix(),
+    },
+    {
+      title: 'Reason',
+      dataIndex: 'reason',
+      key: 'reason',
+      ellipsis: true,
+    },
+    {
+      title: 'Status',
+      dataIndex: 'status',
+      key: 'status',
+      render: (status) => {
+        let color = 'default';
+        if (status === 'approved') color = 'green';
+        else if (status === 'denied') color = 'red';
+        else if (status === 'pending') color = 'orange';
+        
+        return (
+          <Badge 
+            color={color} 
+            text={status.charAt(0).toUpperCase() + status.slice(1)} 
+          />
+        );
+      },
+      filters: [
+        { text: 'Pending', value: 'pending' },
+        { text: 'Approved', value: 'approved' },
+        { text: 'Denied', value: 'denied' },
+      ],
+      onFilter: (value, record) => record.status === value,
+    },
+    {
+      title: 'Substitute',
+      dataIndex: 'substituteName',
+      key: 'substituteName',
+      render: (text) => text || '-',
+    },
+    {
+      title: 'Actions',
+      key: 'actions',
+      render: (_, record) => (
+        <Space size="middle">
+          <Button type="primary" onClick={() => showRequestModal(record)}>
+            View Details
+          </Button>
+        </Space>
+      ),
+    },
+  ];
+
   // Function to initialize unavailable_dates field for all faculty users
   const initializeUnavailableDates = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.post(`${makeApi}/faculty/initialize-unavailable-dates`, {}, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const api = makeApi();
+      const response = await api.post('/faculty/initialize-unavailable-dates', {});
 
       if (response.status === 200) {
         notification.success({
@@ -520,16 +611,17 @@ const FacultyAvailabilityManager = () => {
           
           <Space className="mb-4">
             <Button 
-              type="primary" 
-              onClick={() => setShowCreateModal(true)}
-            >
-              Add New Request
-            </Button>
-            <Button 
               type="default" 
               onClick={initializeUnavailableDates}
             >
               Initialize Faculty Availability
+            </Button>
+            <Button 
+              type="primary" 
+              onClick={fetchAllData}
+              loading={loadingData}
+            >
+              Refresh Data
             </Button>
           </Space>
           
@@ -549,7 +641,30 @@ const FacultyAvailabilityManager = () => {
           )}
         </TabPane>
         
-        <TabPane tab="Calendar View" key="2">
+        <TabPane tab="All Requests" key="2">
+          <div className="mb-4">
+            <Paragraph>
+              View all faculty unavailability requests with their current status.
+            </Paragraph>
+          </div>
+          
+          {loadingData ? (
+            <div className="flex justify-center items-center h-64">
+              <Spin size="large" />
+            </div>
+          ) : allRequests.length > 0 ? (
+            <Table 
+              columns={allRequestsColumns} 
+              dataSource={allRequests} 
+              rowKey="key"
+              pagination={{ pageSize: 10 }}
+            />
+          ) : (
+            <Empty description="No availability requests found" />
+          )}
+        </TabPane>
+        
+        <TabPane tab="Calendar View" key="3">
           <div className="mb-4">
             <Row gutter={16} align="middle">
               <Col>
@@ -635,17 +750,21 @@ const FacultyAvailabilityManager = () => {
             <div className="mt-6 flex justify-end">
               <Space>
                 <Button onClick={() => setIsModalVisible(false)}>
-                  Cancel
+                  Close
                 </Button>
-                <Button danger onClick={handleDenyRequest}>
-                  Deny Request
-                </Button>
-                <Button 
-                  type="primary" 
-                  onClick={handleApproveRequest}
-                >
-                  {selectedRequest.substituteId ? 'Approve Request' : 'Assign Substitute & Approve'}
-                </Button>
+                {selectedRequest.status === 'pending' && (
+                  <>
+                    <Button danger onClick={handleDenyRequest}>
+                      Deny Request
+                    </Button>
+                    <Button 
+                      type="primary" 
+                      onClick={handleApproveRequest}
+                    >
+                      {selectedRequest.substituteId ? 'Approve Request' : 'Assign Substitute & Approve'}
+                    </Button>
+                  </>
+                )}
               </Space>
             </div>
           </div>

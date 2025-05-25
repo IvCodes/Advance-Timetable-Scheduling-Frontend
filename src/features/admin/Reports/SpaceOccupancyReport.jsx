@@ -18,8 +18,8 @@ import {
   Tabs
 } from 'antd';
 import { useDispatch, useSelector } from 'react-redux';
-import { getSpaces, getDays, getPeriods } from '../DataManagement/data.api';
-import { getPublishedTimetable } from '../Timetable/timetable.api';
+import { getDays, getPeriods } from '../DataManagement/data.api';
+import { getSpaceOccupancyReport } from './dashboard.api';
 import { DownloadOutlined, FileExcelOutlined, FilePdfOutlined, ClockCircleOutlined, HomeOutlined } from '@ant-design/icons';
 import { Pie, Column } from '@ant-design/charts';
 import jsPDF from 'jspdf';
@@ -46,27 +46,21 @@ const SpaceOccupancyReport = () => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        // Fetch spaces, days, periods and published timetable
-        const [spacesResponse, daysResponse, periodsResponse, timetableResponse] = await Promise.all([
-          dispatch(getSpaces()).unwrap(),
+        // Fetch space occupancy report and days/periods for filtering
+        const [reportResponse, daysResponse, periodsResponse] = await Promise.all([
+          dispatch(getSpaceOccupancyReport()).unwrap(),
           dispatch(getDays()).unwrap(),
-          dispatch(getPeriods()).unwrap(),
-          dispatch(getPublishedTimetable()).unwrap()
+          dispatch(getPeriods()).unwrap()
         ]);
 
-        setSpaces(spacesResponse || []);
         setDays(daysResponse || []);
         setPeriods(periodsResponse || []);
 
-        // Process timetable data to get space occupancy
-        const spaceOccupancy = processSpaceOccupancy(
-          spacesResponse, 
-          daysResponse, 
-          periodsResponse, 
-          timetableResponse
-        );
-        
+        // Set occupancy data from backend
+        const spaceOccupancy = reportResponse.spaces || [];
         setOccupancyData(spaceOccupancy);
+        setSpaces(spaceOccupancy); // Use spaces from the report
+
       } catch (error) {
         console.error("Error fetching report data:", error);
       } finally {
@@ -79,7 +73,7 @@ const SpaceOccupancyReport = () => {
 
   // Process timetable data to get space occupancy
   const processSpaceOccupancy = (spaces, days, periods, timetable) => {
-    if (!timetable || !timetable.timetable || !timetable.timetable.slots) {
+    if (!timetable || !timetable.semesters) {
       return [];
     }
 
@@ -88,9 +82,9 @@ const SpaceOccupancyReport = () => {
     
     spaces.forEach(space => {
       spaceOccupancyMap.set(space.name, {
-        id: space.id || space.name,
+        id: space._id || space.name,
         name: space.name,
-        type: space.type || 'Lecture Hall',
+        type: space.attributes?.type || 'Lecture Hall',
         capacity: space.capacity || 30,
         totalSlots: 0,
         occupiedSlots: 0,
@@ -104,43 +98,47 @@ const SpaceOccupancyReport = () => {
     // Calculate total possible slots per space
     const totalPossibleSlots = days.length * periods.length;
 
-    // Count occupancies from timetable slots
-    timetable.timetable.slots.forEach(slot => {
-      const roomName = slot.room;
-      
-      if (roomName && spaceOccupancyMap.has(roomName)) {
-        const spaceData = spaceOccupancyMap.get(roomName);
-        spaceData.occupiedSlots += 1;
+    // Count occupancies from all semesters
+    Object.values(timetable.semesters).forEach(semesterEntries => {
+      semesterEntries.forEach(entry => {
+        const roomName = entry.room?.name || entry.room;
         
-        // Track day occupancy
-        if (!spaceData.dayOccupancy[slot.day]) {
-          spaceData.dayOccupancy[slot.day] = 1;
-        } else {
-          spaceData.dayOccupancy[slot.day] += 1;
+        if (roomName && spaceOccupancyMap.has(roomName)) {
+          const spaceData = spaceOccupancyMap.get(roomName);
+          spaceData.occupiedSlots += 1;
+          
+          // Track day occupancy
+          const dayName = entry.day?.name || entry.day;
+          if (!spaceData.dayOccupancy[dayName]) {
+            spaceData.dayOccupancy[dayName] = 1;
+          } else {
+            spaceData.dayOccupancy[dayName] += 1;
+          }
+          
+          // Track period occupancy
+          const periodName = entry.period?.[0]?.name || entry.period;
+          if (!spaceData.periodOccupancy[periodName]) {
+            spaceData.periodOccupancy[periodName] = 1;
+          } else {
+            spaceData.periodOccupancy[periodName] += 1;
+          }
+          
+          // Add detailed slot info
+          spaceData.details.push({
+            day: dayName,
+            period: periodName,
+            subject: entry.subject,
+            teacher: entry.teacher,
+            studentGroup: entry.subgroup || '-'
+          });
         }
-        
-        // Track period occupancy
-        if (!spaceData.periodOccupancy[slot.period]) {
-          spaceData.periodOccupancy[slot.period] = 1;
-        } else {
-          spaceData.periodOccupancy[slot.period] += 1;
-        }
-        
-        // Add detailed slot info
-        spaceData.details.push({
-          day: slot.day,
-          period: slot.period,
-          subject: slot.subject,
-          teacher: slot.teacher,
-          studentGroup: slot.student_group || '-'
-        });
-      }
+      });
     });
 
     // Calculate occupancy rates and finalize data
     const spaceOccupancy = Array.from(spaceOccupancyMap.values()).map(space => {
       space.totalSlots = totalPossibleSlots;
-      space.occupancyRate = (space.occupiedSlots / space.totalSlots) * 100;
+      space.occupancyRate = space.totalSlots > 0 ? (space.occupiedSlots / space.totalSlots) * 100 : 0;
       
       return space;
     });
@@ -180,52 +178,59 @@ const SpaceOccupancyReport = () => {
 
   // Generate PDF report
   const exportPDF = () => {
-    const doc = new jsPDF();
-    
-    // Add title
-    doc.setFontSize(18);
-    doc.text('Space Occupancy Report', 14, 22);
-    
-    // Add filter info
-    doc.setFontSize(12);
-    doc.text(`Day: ${selectedDay === 'all' ? 'All Days' : selectedDay}`, 14, 32);
-    doc.text(`Space Type: ${selectedType === 'all' ? 'All Types' : selectedType}`, 14, 38);
-    
-    // Add date
-    doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 44);
-    
-    // Prepare table data
-    const tableColumn = ['Space', 'Type', 'Capacity', 'Occupied Slots', 'Total Slots', 'Occupancy Rate'];
-    const tableRows = filteredOccupancy.map(item => [
-      item.name,
-      item.type,
-      item.capacity,
-      item.occupiedSlots,
-      item.totalSlots,
-      `${Math.round(item.occupancyRate)}%`
-    ]);
-    
-    // Add table
-    doc.autoTable({
-      head: [tableColumn],
-      body: tableRows,
-      startY: 50,
-      theme: 'grid',
-      styles: { 
-        fontSize: 9,
-        cellPadding: 3
-      },
-      columnStyles: {
-        0: { cellWidth: 30 },
-        1: { cellWidth: 30 },
-        2: { cellWidth: 20 },
-        3: { cellWidth: 25 },
-        4: { cellWidth: 20 },
-        5: { cellWidth: 25 }
-      }
-    });
-    
-    doc.save('space-occupancy-report.pdf');
+    try {
+      const doc = new jsPDF();
+      
+      // Add title
+      doc.setFontSize(18);
+      doc.text('Space Occupancy Report', 14, 22);
+      
+      // Add filter info
+      doc.setFontSize(12);
+      doc.text(`Day: ${selectedDay === 'all' ? 'All Days' : selectedDay}`, 14, 32);
+      doc.text(`Space Type: ${selectedType === 'all' ? 'All Types' : selectedType}`, 14, 38);
+      
+      // Add date
+      doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 44);
+      
+      // Prepare table data
+      const tableColumn = ['Space', 'Type', 'Capacity', 'Occupied', 'Total', 'Rate'];
+      const tableRows = filteredOccupancy.map(item => [
+        item.name || 'N/A',
+        item.type || 'Unknown',
+        item.capacity || 0,
+        item.occupiedSlots || 0,
+        item.totalSlots || 0,
+        `${Math.round(item.occupancyRate || 0)}%`
+      ]);
+      
+      // Add table
+      doc.autoTable({
+        head: [tableColumn],
+        body: tableRows,
+        startY: 50,
+        theme: 'grid',
+        styles: { 
+          fontSize: 8,
+          cellPadding: 2,
+          overflow: 'linebreak'
+        },
+        columnStyles: {
+          0: { cellWidth: 35 },
+          1: { cellWidth: 30 },
+          2: { cellWidth: 20 },
+          3: { cellWidth: 20 },
+          4: { cellWidth: 20 },
+          5: { cellWidth: 20 }
+        },
+        margin: { top: 50 }
+      });
+      
+      doc.save('space-occupancy-report.pdf');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('Error generating PDF. Please try again.');
+    }
   };
 
   // Export Excel report
@@ -454,6 +459,15 @@ const SpaceOccupancyReport = () => {
             </Card>
           </Col>
         </Row>
+
+        {filteredOccupancy.every(item => item.occupiedSlots === 0) && (
+          <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded">
+            <Text type="warning">
+              <strong>Note:</strong> No published timetable found. Showing space list with zero occupancy. 
+              Please publish a timetable to see actual occupancy data.
+            </Text>
+          </div>
+        )}
 
         {viewMode === 'table' ? (
           <Table 

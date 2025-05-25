@@ -15,9 +15,7 @@ import {
   Space
 } from 'antd';
 import { useDispatch, useSelector } from 'react-redux';
-import { getUsers } from '../UserManagement/users.api';
-import { getSubjects } from '../DataManagement/data.api';
-import { getPublishedTimetable } from '../Timetable/timetable.api';
+import { getTeacherAllocationReport } from './dashboard.api';
 import { DownloadOutlined, FileExcelOutlined, FilePdfOutlined } from '@ant-design/icons';
 import { Bar } from '@ant-design/charts';
 import jsPDF from 'jspdf';
@@ -40,24 +38,21 @@ const TeacherAllocationReport = () => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        // Fetch users, subjects and published timetable
-        const [usersResponse, subjectsResponse, timetableResponse] = await Promise.all([
-          dispatch(getUsers()).unwrap(),
-          dispatch(getSubjects()).unwrap(),
-          dispatch(getPublishedTimetable()).unwrap()
-        ]);
-
-        // Filter users to get only teachers
-        const teachersList = usersResponse?.filter(user => user.role === 'faculty') || [];
+        // Fetch teacher allocation report from backend
+        const reportResponse = await dispatch(getTeacherAllocationReport()).unwrap();
+        
+        // Set teachers and allocation data
+        const teachersList = reportResponse.teachers || [];
         setTeachers(teachersList);
+        setAllocation(teachersList.map(teacher => ({
+          ...teacher,
+          subjectList: teacher.subjects || []
+        })));
 
         // Extract faculties
         const faculties = [...new Set(teachersList.map(teacher => teacher.faculty))].filter(Boolean);
         setFacultyList(faculties);
 
-        // Process timetable data to get teacher allocations
-        const teacherAllocations = processTeacherAllocations(teachersList, subjectsResponse, timetableResponse);
-        setAllocation(teacherAllocations);
       } catch (error) {
         console.error("Error fetching report data:", error);
       } finally {
@@ -70,7 +65,7 @@ const TeacherAllocationReport = () => {
 
   // Process timetable data to get teacher allocations
   const processTeacherAllocations = (teachers, subjects, timetable) => {
-    if (!timetable || !timetable.timetable || !timetable.timetable.slots) {
+    if (!timetable || !timetable.semesters) {
       return [];
     }
 
@@ -78,9 +73,10 @@ const TeacherAllocationReport = () => {
     const teacherAllocationMap = new Map();
     
     teachers.forEach(teacher => {
+      const teacherName = `${teacher.first_name} ${teacher.last_name}`;
       teacherAllocationMap.set(teacher.id, {
         id: teacher.id,
-        name: teacher.name,
+        name: teacherName,
         faculty: teacher.faculty || 'Unassigned',
         totalSlots: 0,
         subjects: new Map(),
@@ -89,24 +85,33 @@ const TeacherAllocationReport = () => {
       });
     });
 
-    // Count allocations from timetable slots
-    timetable.timetable.slots.forEach(slot => {
-      const teacherId = teachers.find(t => t.name === slot.teacher)?.id;
-      
-      if (teacherId && teacherAllocationMap.has(teacherId)) {
-        const teacherData = teacherAllocationMap.get(teacherId);
-        teacherData.totalSlots += 1;
+    // Count allocations from all semesters
+    Object.values(timetable.semesters).forEach(semesterEntries => {
+      semesterEntries.forEach(entry => {
+        // Find teacher by name match
+        const teacher = teachers.find(t => 
+          entry.teacher === `${t.first_name} ${t.last_name}` || 
+          entry.teacher === t.id ||
+          entry.teacher === t.username
+        );
         
-        // Track subject allocations
-        if (!teacherData.subjects.has(slot.subject)) {
-          teacherData.subjects.set(slot.subject, 1);
-        } else {
-          teacherData.subjects.set(slot.subject, teacherData.subjects.get(slot.subject) + 1);
+        if (teacher && teacherAllocationMap.has(teacher.id)) {
+          const teacherData = teacherAllocationMap.get(teacher.id);
+          teacherData.totalSlots += 1;
+          
+          // Track subject allocations
+          const subject = entry.subject || 'Unknown';
+          if (!teacherData.subjects.has(subject)) {
+            teacherData.subjects.set(subject, 1);
+          } else {
+            teacherData.subjects.set(subject, teacherData.subjects.get(subject) + 1);
+          }
+          
+          // Calculate workload hours (using duration if available, otherwise assume 1 hour)
+          const duration = entry.duration || 1;
+          teacherData.workloadHours += duration;
         }
-        
-        // Calculate workload hours (assuming each slot is 1 hour, adjust as needed)
-        teacherData.workloadHours += 1;
-      }
+      });
     });
 
     // Calculate workload percentages
@@ -145,49 +150,59 @@ const TeacherAllocationReport = () => {
 
   // Generate PDF report
   const exportPDF = () => {
-    const doc = new jsPDF();
-    
-    // Add title
-    doc.setFontSize(18);
-    doc.text('Teacher Allocation Report', 14, 22);
-    
-    // Add faculty filter info
-    doc.setFontSize(12);
-    doc.text(`Faculty: ${selectedFaculty === 'all' ? 'All Faculties' : selectedFaculty}`, 14, 32);
-    
-    // Add date
-    doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 38);
-    
-    // Prepare table data
-    const tableColumn = ['Teacher', 'Faculty', 'Subjects', 'Total Hours', 'Workload %'];
-    const tableRows = filteredAllocations.map(item => [
-      item.name,
-      item.faculty,
-      item.subjectList.map(s => `${s.subject} (${s.count})`).join(', '),
-      item.workloadHours,
-      `${Math.round(item.workloadPercentage)}%`
-    ]);
-    
-    // Add table
-    doc.autoTable({
-      head: [tableColumn],
-      body: tableRows,
-      startY: 45,
-      theme: 'grid',
-      styles: { 
-        fontSize: 9,
-        cellPadding: 3
-      },
-      columnStyles: {
-        0: { cellWidth: 30 },
-        1: { cellWidth: 30 },
-        2: { cellWidth: 50 },
-        3: { cellWidth: 25 },
-        4: { cellWidth: 25 }
-      }
-    });
-    
-    doc.save('teacher-allocation-report.pdf');
+    try {
+      const doc = new jsPDF();
+      
+      // Add title
+      doc.setFontSize(18);
+      doc.text('Teacher Allocation Report', 14, 22);
+      
+      // Add faculty filter info
+      doc.setFontSize(12);
+      doc.text(`Faculty: ${selectedFaculty === 'all' ? 'All Faculties' : selectedFaculty}`, 14, 32);
+      
+      // Add date
+      doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 38);
+      
+      // Prepare table data
+      const tableColumn = ['Teacher', 'Faculty', 'Subjects', 'Hours', 'Workload'];
+      const tableRows = filteredAllocations.map(item => [
+        item.name || 'N/A',
+        item.faculty || 'Unassigned',
+        item.subjectList.length > 0 
+          ? item.subjectList.map(s => `${s.subject} (${s.count})`).join(', ')
+          : 'No subjects',
+        item.workloadHours || 0,
+        `${Math.round(item.workloadPercentage || 0)}%`
+      ]);
+      
+      // Add table
+      doc.autoTable({
+        head: [tableColumn],
+        body: tableRows,
+        startY: 45,
+        theme: 'grid',
+        styles: { 
+          fontSize: 8,
+          cellPadding: 2,
+          overflow: 'linebreak'
+        },
+        columnStyles: {
+          0: { cellWidth: 35 },
+          1: { cellWidth: 30 },
+          2: { cellWidth: 60 },
+          3: { cellWidth: 20 },
+          4: { cellWidth: 20 }
+        },
+        margin: { top: 45 }
+      });
+      
+      doc.save('teacher-allocation-report.pdf');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      // You might want to show a user-friendly error message here
+      alert('Error generating PDF. Please try again.');
+    }
   };
 
   // Export Excel report
@@ -226,14 +241,22 @@ const TeacherAllocationReport = () => {
       title: 'Subjects',
       key: 'subjects',
       render: (_, record) => (
-        <Space size={[0, 4]} wrap>
+        <Space size={[4, 8]} wrap>
           {record.subjectList.map(subject => (
             <Badge 
               key={subject.subject} 
               count={subject.count} 
               style={{ backgroundColor: '#1890ff' }}
             >
-              <Tag color="#282828" style={{ color: '#f0f0f0', marginRight: 8 }}>
+              <Tag color="blue" style={{ 
+                color: '#1890ff', 
+                backgroundColor: '#e6f7ff',
+                border: '1px solid #91d5ff',
+                marginRight: 4,
+                marginBottom: 4,
+                fontSize: '12px',
+                padding: '2px 8px'
+              }}>
                 {subject.subject}
               </Tag>
             </Badge>
@@ -367,6 +390,15 @@ const TeacherAllocationReport = () => {
             </Card>
           </Col>
         </Row>
+
+        {filteredAllocations.every(item => item.totalSlots === 0) && (
+          <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded">
+            <Text type="warning">
+              <strong>Note:</strong> No published timetable found. Showing teacher list with zero allocations. 
+              Please publish a timetable to see actual allocation data.
+            </Text>
+          </div>
+        )}
 
         {viewMode === 'table' ? (
           <Table 

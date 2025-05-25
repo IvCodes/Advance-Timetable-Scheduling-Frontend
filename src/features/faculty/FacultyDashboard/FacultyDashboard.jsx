@@ -23,7 +23,8 @@ import {
   Statistic,
   Alert,
   Divider,
-  Tooltip
+  Tooltip,
+  Select
 } from "antd";
 import { 
   InfoCircleOutlined, 
@@ -51,13 +52,14 @@ const API_URL = import.meta.env.VITE_API_URL;
 
 const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
+const { Option } = Select;
 
 // Function to get all unavailable days for a faculty member
 const getFacultyUnavailableDays = async (facultyId) => {
   try {
-    // Call the actual API endpoint
+    // Call the new faculty-availability API endpoint
     const token = localStorage.getItem('token');
-    const response = await fetch(`${API_URL}faculty/faculty/unavailable-days/${facultyId}`, {
+    const response = await fetch(`${API_URL}faculty-availability/faculty/${facultyId}/unavailable-dates`, {
       headers: {
         'Authorization': `Bearer ${token}`
       }
@@ -75,11 +77,12 @@ const getFacultyUnavailableDays = async (facultyId) => {
     if (Array.isArray(data)) {
       // Map to ensure consistent format and avoid any potential issues
       return data.map(day => ({
-        id: day.id,
+        id: day.id || `${facultyId}-${day.date}`,
         date: day.date,
         reason: day.reason || '',
-        status: day.status || 'approved',
-        substitute_id: day.substitute_id
+        status: 'approved', // This endpoint only returns approved dates
+        substitute_id: day.substitute_id,
+        substitute_name: day.substitute_name
       }));
     }
     
@@ -155,7 +158,7 @@ const getCurrentAuthenticatedUser = () => {
 };
 
 // Function to mark a day as unavailable
-const markDayAsUnavailable = async (facultyId, date, reason) => {
+const markDayAsUnavailable = async (facultyId, date, reason, unavailabilityType = 'personal_leave') => {
   try {
     // Get authenticated user
     const currentUser = getCurrentAuthenticatedUser();
@@ -168,18 +171,19 @@ const markDayAsUnavailable = async (facultyId, date, reason) => {
     const userId = currentUser.id;
     console.log(`Marking ${date} as unavailable for faculty ID: ${userId}`);
     
-    // Call the actual API endpoint
+    // Call the new faculty-availability API endpoint
     const token = localStorage.getItem('token');
     
     // Log the request payload for debugging
     const payload = {
       faculty_id: userId,
       date: date,
-      reason: reason || ''
+      reason: reason || '',
+      unavailability_type: unavailabilityType
     };
     console.log("Request payload:", payload);
     
-    const response = await fetch(`${API_URL}faculty/faculty/unavailable-days`, {
+    const response = await fetch(`${API_URL}faculty-availability/unavailability-requests`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -215,51 +219,16 @@ const markDayAsUnavailable = async (facultyId, date, reason) => {
 // Function to mark a day as available (remove from unavailable list)
 const markDayAsAvailable = async (facultyId, date) => {
   try {
-    // Get authenticated user
-    const currentUser = getCurrentAuthenticatedUser();
+    // In the new system, approved unavailability requests cannot be directly cancelled by faculty
+    // They need to contact admin or submit a new request to override
+    console.log(`Cannot directly mark ${date} as available - approved requests require admin action`);
     
-    if (!currentUser || !currentUser.id) {
-      console.error("Cannot make API call - user not authenticated");
-      return false;
-    }
+    // Show a message to the user
+    message.info("Approved unavailability requests cannot be directly cancelled. Please contact your administrator or submit a new request if your availability has changed.");
     
-    const userId = currentUser.id;
-    console.log(`Marking ${date} as available for faculty ID: ${userId}`);
-    
-    // Call the actual API endpoint
-    const token = localStorage.getItem('token');
-    
-    const response = await fetch(`${API_URL}faculty/unavailable-days/${userId}/${date}`, {
-      method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    });
-    
-    // Log the response for debugging
-    console.log("Response status:", response.status);
-    
-    try {
-      const responseText = await response.text();
-      console.log("Response text:", responseText);
-      
-      // If there's JSON content, parse and log it
-      if (responseText) {
-        try {
-          const responseData = JSON.parse(responseText);
-          console.log("Response data:", responseData);
-        } catch (e) {
-          console.error("Error parsing JSON response:", e);
-        }
-      }
-    } catch (error) {
-      console.error("Error reading response:", error);
-    }
-    
-    return response.ok;
+    return false;
   } catch (error) {
-    console.error("Error marking day as available:", error);
-    // Return false to indicate failure during development
+    console.error("Error in markDayAsAvailable:", error);
     return false;
   }
 };
@@ -312,6 +281,7 @@ const FacultyDashboard = () => {
   const [unavailableDays, setUnavailableDays] = useState([]);
   const [selectedDate, setSelectedDate] = useState(null);
   const [reason, setReason] = useState('');
+  const [unavailabilityType, setUnavailabilityType] = useState('personal_leave');
   const [modalVisible, setModalVisible] = useState(false);
   const [currentView, setCurrentView] = useState('month');
   
@@ -895,12 +865,13 @@ const FacultyDashboard = () => {
       }
     } else {
       // Mark as unavailable
-      success = await markDayAsUnavailable(currentFacultyId, selectedDate, reason);
+      success = await markDayAsUnavailable(currentFacultyId, selectedDate, reason, unavailabilityType);
       if (success) {
         const newUnavailableDay = { 
           date: selectedDate,
           reason: reason || '',
-          status: 'pending'
+          status: 'pending',
+          unavailability_type: unavailabilityType
         };
         setUnavailableDays(prevDays => [...prevDays, newUnavailableDay]);
         message.success("Day marked as unavailable");
@@ -912,6 +883,7 @@ const FacultyDashboard = () => {
     if (success) {
       setModalVisible(false);
       setReason('');
+      setUnavailabilityType('personal_leave');
     }
   };
 
@@ -1334,11 +1306,28 @@ const FacultyDashboard = () => {
             footer={null}
           >
             <div className="mb-4">
-              <Text>Date: {selectedDate}</Text>
+              <Text strong>Date: </Text>
+              <Text>{selectedDate}</Text>
             </div>
             
             <div className="mb-4">
-              <Text>Reason for unavailability:</Text>
+              <Text strong>Type of Leave:</Text>
+              <Select
+                value={unavailabilityType}
+                onChange={setUnavailabilityType}
+                style={{ width: '100%', marginTop: 8 }}
+                placeholder="Select leave type"
+              >
+                <Option value="personal_leave">Personal Leave</Option>
+                <Option value="sick_leave">Sick Leave</Option>
+                <Option value="conference">Conference/Training</Option>
+                <Option value="emergency">Emergency</Option>
+                <Option value="other">Other</Option>
+              </Select>
+            </div>
+            
+            <div className="mb-4">
+              <Text strong>Reason for unavailability:</Text>
               <TextArea 
                 rows={4} 
                 placeholder="Enter reason for unavailability" 
@@ -1346,21 +1335,21 @@ const FacultyDashboard = () => {
                 onChange={(e) => setReason(e.target.value)}
                 className="mt-2"
               />
-              
-              <div className="mt-4">
-                <Button 
-                  type="primary" 
-                  onClick={() => handleMarkUnavailable()}
-                >
-                  Mark as Unavailable
-                </Button>
-                <Button 
-                  onClick={() => setModalVisible(false)}
-                  style={{ marginLeft: 8 }}
-                >
-                  Cancel
-                </Button>
-              </div>
+            </div>
+            
+            <div className="mt-4">
+              <Button 
+                type="primary" 
+                onClick={() => handleMarkUnavailable()}
+                style={{ marginRight: 8 }}
+              >
+                Mark as Unavailable
+              </Button>
+              <Button 
+                onClick={() => setModalVisible(false)}
+              >
+                Cancel
+              </Button>
             </div>
           </Modal>
           

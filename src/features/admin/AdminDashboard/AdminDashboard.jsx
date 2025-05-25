@@ -21,7 +21,6 @@ import {
   TeamOutlined,
   HomeOutlined,
 } from '@ant-design/icons';
-import FacultyAvailabilityManager from './FacultyAvailabilityManager';
 import FacultyUnavailability from '../Timetable/FacultyUnavailability';
 import TeacherAllocationReport from '../Reports/TeacherAllocationReport';
 import SpaceOccupancyReport from '../Reports/SpaceOccupancyReport';
@@ -39,7 +38,7 @@ const AdminDashboard = () => {
   const dispatch = useDispatch();
   const [collapsed, setCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState('1');
-  const [facultyAvailabilityTab, setFacultyAvailabilityTab] = useState('availability');
+
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   
@@ -231,19 +230,7 @@ const AdminDashboard = () => {
                       
                       {/* Faculty Availability Management */}
                       <div className="faculty-availability-section mb-6">
-                        <Title level={4}>Faculty Availability Management</Title>
-                        <Tabs 
-                          activeKey={facultyAvailabilityTab} 
-                          onChange={setFacultyAvailabilityTab}
-                          className="mt-4"
-                        >
-                          <TabPane tab="Availability Calendar" key="availability">
-                            <FacultyAvailabilityManager />
-                          </TabPane>
-                          <TabPane tab="Faculty Unavailability" key="unavailability">
-                            <FacultyUnavailability />
-                          </TabPane>
-                        </Tabs>
+                        <FacultyUnavailability />
                       </div>
                       
                       <Divider />

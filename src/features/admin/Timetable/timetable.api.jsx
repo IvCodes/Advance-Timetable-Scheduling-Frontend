@@ -19,10 +19,20 @@ export const getTimetable = createAsyncThunk(
   }
 );
 
+export const setNotificationRead = createAsyncThunk(
+  'notifications/setRead',
+  async (notificationId) => {
+    const response = await api.put(`/notifications/${notificationId}/read`);
+    return response.data;
+  }
+);
+
 export const markAllNotificationsRead = createAsyncThunk(
   'notifications/markAllRead',
   async () => {
-    const response = await api.put('/timetable/notifications/mark-all-read');
+    // For now, we'll mark individual notifications as read
+    // This would need to be implemented on the backend
+    const response = await api.get('/notifications');
     return response.data;
   }
 );
@@ -169,7 +179,8 @@ export const llmResponse = async (scores) => {
     return response.data.analysis;
   } catch (error) {
     console.error("Error evaluating algorithms:", error);
-    return "Failed to evaluate algorithms. Please try again later.";
+    // Throw the error so the calling code can handle it with offline fallback
+    throw new Error("LLM service unavailable");
   }
 };
 
@@ -195,10 +206,20 @@ export const formatScoresForAPI = (evaluation) => {
 export const getNotifications = createAsyncThunk(
   "timetable/notifications",
   async () => {
-    const response = await api.get("/timetable/notifications");
+    const response = await api.get("/notifications");
     return response.data;
   }
 );
+
+export const checkGenerationStatus = createAsyncThunk(
+  "timetable/checkGenerationStatus",
+  async () => {
+    const response = await api.get("/timetable/generation-status");
+    return response.data;
+  }
+);
+
+
 
 // SLIIT Timetable API functions
 export const generateSliitTimetable = createAsyncThunk(
@@ -260,10 +281,15 @@ export const getTimetableStats = createAsyncThunk(
   }
 );
 
-export const setNotificationRead = createAsyncThunk(
-  "timetable/read",
-  async (id) => {
-    const response = await api.put(`/timetable/notifications/${id}`);
-    return response.data;
+export const deleteSliitTimetable = createAsyncThunk(
+  "timetable/deleteSliitTimetable",
+  async (timetableId) => {
+    try {
+      const response = await api.delete(`/timetable/sliit/${timetableId}`);
+      return response.data;
+    } catch (error) {
+      console.error("Error deleting timetable:", error);
+      throw error;
+    }
   }
 );

@@ -6,8 +6,8 @@ export default function makeApi() {
   
   const instance = axios.create({
     baseURL: apiUrl,
-    timeout: 10000, // Increased timeout for slower connections
-    withCredentials: true, // Include cookies in cross-site requests
+    timeout: 300000, // 5 minutes timeout for timetable generation
+    // withCredentials removed to fix CORS issues
   });
 
   instance.defaults.headers.common["Content-Type"] = "application/json";

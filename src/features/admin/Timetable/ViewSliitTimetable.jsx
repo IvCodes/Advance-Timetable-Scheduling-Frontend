@@ -21,6 +21,7 @@ import {
   Input,
   Select,
   InputNumber,
+  Popconfirm,
 } from "antd";
 import {
   FileTextOutlined,
@@ -32,12 +33,14 @@ import {
   DownloadOutlined,
   DownOutlined,
   UpOutlined,
+  DeleteOutlined,
 } from "@ant-design/icons";
 import {
   getSliitTimetables,
   getTimetableHtmlUrl,
   getTimetableStats,
   generateSliitTimetable,
+  deleteSliitTimetable,
 } from "./timetable.api";
 
 const { Title, Text } = Typography;
@@ -51,6 +54,7 @@ const ViewSliitTimetable = () => {
   const [statsLoading, setStatsLoading] = useState(false);
   const [isGenerateModalVisible, setIsGenerateModalVisible] = useState(false);
   const [generationLoading, setGenerationLoading] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const [form] = Form.useForm();
 
   // Fetch all SLIIT timetables
@@ -102,6 +106,46 @@ const ViewSliitTimetable = () => {
   const handleTimetableSelect = (timetable) => {
     setSelectedTimetable(timetable);
     fetchTimetableStats(timetable._id);
+  };
+
+  // Handler for deleting a timetable
+  const handleDeleteTimetable = async (timetableId) => {
+    setDeleteLoading(true);
+    try {
+      await dispatch(deleteSliitTimetable(timetableId)).unwrap();
+      message.success("Timetable deleted successfully");
+      
+      // Refresh the timetables list immediately
+      const result = await dispatch(getSliitTimetables()).unwrap();
+      setTimetables(result);
+      
+      // If the deleted timetable was selected, clear selection or select first available
+      if (selectedTimetable?._id === timetableId) {
+        if (result && result.length > 0) {
+          setSelectedTimetable(result[0]);
+          fetchTimetableStats(result[0]._id);
+        } else {
+          setSelectedTimetable(null);
+          setStats(null);
+        }
+      }
+      
+      // Force a re-render by updating the key or state
+      setTimeout(() => {
+        // Additional refresh to ensure UI updates
+        dispatch(getSliitTimetables()).then((refreshResult) => {
+          if (refreshResult.payload) {
+            setTimetables(refreshResult.payload);
+          }
+        });
+      }, 100);
+      
+    } catch (error) {
+      console.error("Error deleting timetable:", error);
+      message.error("Failed to delete timetable");
+    } finally {
+      setDeleteLoading(false);
+    }
   };
 
   // Format the algorithm name for display
@@ -180,25 +224,37 @@ const ViewSliitTimetable = () => {
 
     switch (algorithm.toLowerCase()) {
       case "nsga2":
-        return "NSGA-II is a multi-objective optimization algorithm that uses a non-dominated sorting approach. It excels at finding a diverse set of Pareto-optimal solutions, making it effective for complex timetabling problems with competing objectives.";
+        return "NSGA-II is a multi-objective optimization algorithm that uses a non-dominated sorting approach. It excels at finding a diverse set of Pareto-optimal solutions, making it effective for complex timetabling problems with competing objectives. Recommended: Population 50-100, Generations 30-50.";
       case "spea2":
-        return "SPEA2 (Strength Pareto Evolutionary Algorithm 2) is a multi-objective optimization algorithm that incorporates a fine-grained fitness assignment strategy, a density estimation technique, and an enhanced archive truncation method to maintain diversity.";
+        return "SPEA2 (Strength Pareto Evolutionary Algorithm 2) is a multi-objective optimization algorithm that incorporates a fine-grained fitness assignment strategy, a density estimation technique, and an enhanced archive truncation method to maintain diversity. Recommended: Population 50-100, Generations 20-40.";
       case "moead":
-        return "MOEA/D (Multi-objective Evolutionary Algorithm Based on Decomposition) decomposes a multi-objective optimization problem into multiple single-objective subproblems and optimizes them simultaneously, which is particularly effective for problems with many objectives.";
+        return "MOEA/D (Multi-objective Evolutionary Algorithm Based on Decomposition) decomposes a multi-objective optimization problem into multiple single-objective subproblems and optimizes them simultaneously, which is particularly effective for problems with many objectives. Recommended: Population 30-80, Generations 40-60.";
       case "dqn":
-        return "DQN (Deep Q-Network) is a reinforcement learning algorithm that uses a neural network to approximate the Q-function, which estimates the expected return for each state-action pair.";
+        return "DQN (Deep Q-Network) is a reinforcement learning algorithm that uses a neural network to approximate the Q-function. For faster results, use 30-50 episodes with learning rate 0.01-0.05. Higher episodes (50-100) may give better quality but take longer.";
       case "sarsa":
-        return "SARSA (State-Action-Reward-State-Action) is a reinforcement learning algorithm that updates the Q-function based on the current state, action, reward, and next state.";
+        return "SARSA (State-Action-Reward-State-Action) is a reinforcement learning algorithm that learns on-policy. For optimal performance, use 30-60 episodes with learning rate 0.01-0.03 and epsilon 0.1-0.3 for exploration.";
       case "implicit_q":
-        return "Implicit Q-learning is a reinforcement learning algorithm that updates the Q-function based on the current state and action, without explicitly computing the Q-function.";
+        return "Implicit Q-learning is a reinforcement learning algorithm that doesn't require explicit Q-function computation. Recommended: 40-80 episodes with epsilon 0.15-0.25. Generally faster than DQN and SARSA.";
       default:
         return "No detailed information available for this algorithm.";
     }
   };
 
+  // Generate auto name for timetable
+  const generateAutoName = (algorithm) => {
+    const timestamp = new Date().toISOString().slice(0, 19).replace(/[-:]/g, '').replace('T', '_');
+    const uid = Math.random().toString(36).substr(2, 6).toUpperCase();
+    return `SLIIT_Timetable_${algorithm.toUpperCase()}_${timestamp}_${uid}`;
+  };
+
   // Show the generate modal
   const showGenerateModal = () => {
     setIsGenerateModalVisible(true);
+    // Set default algorithm and auto-generate name
+    form.setFieldsValue({
+      algorithm: 'nsga2',
+      name: generateAutoName('nsga2')
+    });
   };
 
   // Handle the form submission for timetable generation
@@ -225,9 +281,12 @@ const ViewSliitTimetable = () => {
       // Call the API to generate the timetable
       console.log("Generating timetable with parameters:", parameters);
 
-      // Show a loading notification
+      // Show a loading notification with algorithm-specific message
+      const isRLAlgorithm = ['dqn', 'sarsa', 'implicit_q'].includes(values.algorithm);
+      const timeEstimate = isRLAlgorithm ? "2-5 minutes" : "1-3 minutes";
+      
       generationNotice = message.loading(
-        `Generating timetable using ${formatAlgorithmName(values.algorithm)}. This may take a few minutes...`,
+        `Generating timetable using ${formatAlgorithmName(values.algorithm)}. This may take ${timeEstimate}...`,
         0,
       );
 
@@ -322,8 +381,18 @@ const ViewSliitTimetable = () => {
 
   return (
     <div className="bg-white p-6 rounded-xl shadow-md max-w-6xl mx-auto">
+      <style>
+        {`
+          .sliit-title {
+            color: #1f2937 !important;
+          }
+          .sliit-title .ant-typography {
+            color: #1f2937 !important;
+          }
+        `}
+      </style>
       <div className="flex justify-between items-center mb-4">
-        <Title level={2}>SLIIT Timetables</Title>
+        <Title level={2} style={{ margin: 0, fontWeight: 'bold', color: '#1f2937' }} className="sliit-title text-gray-800">SLIIT Timetables</Title>
         <Button
           type="primary"
           icon={<PlusOutlined />}
@@ -352,9 +421,9 @@ const ViewSliitTimetable = () => {
           <Col xs={24} lg={8}>
             <Card title="Generated Timetables" bordered={false}>
               <div style={{ maxHeight: "500px", overflowY: "auto" }}>
-                {timetables.map((timetable) => (
+                {timetables.map((timetable, index) => (
                   <Card
-                    key={timetable._id}
+                    key={`${timetable._id}-${index}-${timetables.length}`}
                     style={{
                       marginBottom: "10px",
                       borderLeft:
@@ -388,6 +457,26 @@ const ViewSliitTimetable = () => {
                           {new Date(timetable.createdAt).toLocaleString()}
                         </Text>
                       </div>
+                      <Popconfirm
+                        title="Are you sure you want to delete this timetable?"
+                        onConfirm={(e) => {
+                          e?.stopPropagation();
+                          handleDeleteTimetable(timetable._id);
+                        }}
+                        okText="Yes"
+                        cancelText="No"
+                        placement="topRight"
+                        loading={deleteLoading}
+                      >
+                        <Button
+                          type="link"
+                          icon={<DeleteOutlined />}
+                          size="small"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          Delete
+                        </Button>
+                      </Popconfirm>
                     </div>
                   </Card>
                 ))}
@@ -706,6 +795,7 @@ const ViewSliitTimetable = () => {
             algorithm: "nsga2",
             population: 100,
             generations: 50,
+            name: generateAutoName("nsga2"),
           }}
         >
           <Form.Item
@@ -718,7 +808,23 @@ const ViewSliitTimetable = () => {
               },
             ]}
           >
-            <Input placeholder="e.g., SLIIT Summer 2025 Timetable" />
+            <Input.Group compact>
+              <Input 
+                style={{ width: 'calc(100% - 120px)' }}
+                placeholder="e.g., SLIIT_Timetable_NSGA2_20250101_ABC123" 
+              />
+              <Button 
+                style={{ width: '120px' }}
+                onClick={() => {
+                  const currentAlgorithm = form.getFieldValue('algorithm') || 'nsga2';
+                  form.setFieldsValue({
+                    name: generateAutoName(currentAlgorithm)
+                  });
+                }}
+              >
+                Generate Name
+              </Button>
+            </Input.Group>
           </Form.Item>
 
           <Form.Item
@@ -726,7 +832,16 @@ const ViewSliitTimetable = () => {
             label="Algorithm"
             rules={[{ required: true, message: "Please select an algorithm" }]}
           >
-            <Select>{getAlgorithmOptions()}</Select>
+            <Select 
+              onChange={(value) => {
+                // Auto-update name when algorithm changes
+                form.setFieldsValue({
+                  name: generateAutoName(value)
+                });
+              }}
+            >
+              {getAlgorithmOptions()}
+            </Select>
           </Form.Item>
 
           <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => prevValues.algorithm !== currentValues.algorithm}>
@@ -741,19 +856,19 @@ const ViewSliitTimetable = () => {
                       <Form.Item
                         name="learning_rate"
                         label="Learning Rate"
-                        initialValue={0.001}
+                        initialValue={0.01}
                         rules={[
                           { required: true, message: "Please enter learning rate" },
                         ]}
                       >
-                        <InputNumber min={0.0001} max={1} step={0.001} style={{ width: "100%" }} />
+                        <InputNumber min={0.001} max={1} step={0.001} style={{ width: "100%" }} />
                       </Form.Item>
                     </Col>
                     <Col span={8}>
                       <Form.Item
                         name="episodes"
                         label="Episodes"
-                        initialValue={100}
+                        initialValue={50}
                         rules={[
                           {
                             required: true,
@@ -761,14 +876,14 @@ const ViewSliitTimetable = () => {
                           },
                         ]}
                       >
-                        <InputNumber min={10} max={500} style={{ width: "100%" }} />
+                        <InputNumber min={10} max={200} style={{ width: "100%" }} />
                       </Form.Item>
                     </Col>
                     <Col span={8}>
                       <Form.Item
                         name="epsilon"
                         label="Epsilon (Exploration Rate)"
-                        initialValue={0.1}
+                        initialValue={0.2}
                         rules={[
                           {
                             required: true,
