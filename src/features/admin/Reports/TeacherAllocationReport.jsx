@@ -17,7 +17,7 @@ import {
 import { useDispatch, useSelector } from 'react-redux';
 import { getTeacherAllocationReport } from './dashboard.api';
 import { DownloadOutlined, FileExcelOutlined, FilePdfOutlined } from '@ant-design/icons';
-import { Bar } from '@ant-design/charts';
+import { Column } from '@ant-design/charts';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { utils as XLSXUtils, writeFile as writeXLSXFile } from 'xlsx';
@@ -43,11 +43,19 @@ const TeacherAllocationReport = () => {
         
         // Set teachers and allocation data
         const teachersList = reportResponse.teachers || [];
+        console.log('Raw teacher data:', teachersList);
+        
         setTeachers(teachersList);
-        setAllocation(teachersList.map(teacher => ({
+        const processedAllocation = teachersList.map(teacher => ({
           ...teacher,
-          subjectList: teacher.subjects || []
-        })));
+          subjectList: teacher.subjects || [],
+          workloadHours: teacher.workloadHours || 0,
+          workloadPercentage: teacher.workloadPercentage || 0,
+          totalSlots: teacher.totalSlots || 0
+        }));
+        
+        console.log('Processed allocation data:', processedAllocation);
+        setAllocation(processedAllocation);
 
         // Extract faculties
         const faculties = [...new Set(teachersList.map(teacher => teacher.faculty))].filter(Boolean);
@@ -143,8 +151,8 @@ const TeacherAllocationReport = () => {
   // Get chart data
   const getChartData = () => {
     return filteredAllocations.map(item => ({
-      teacher: item.name,
-      workload: item.workloadPercentage
+      teacher: item.name || 'Unknown Teacher',
+      workload: isNaN(item.workloadPercentage) ? 0 : Math.round(item.workloadPercentage || 0)
     }));
   };
 
@@ -310,19 +318,26 @@ const TeacherAllocationReport = () => {
   }
 
   return (
-    <div className="p-6">
+    <div style={{ padding: '24px' }}>
       <Card>
-        <Row gutter={[16, 24]} className="mb-4">
+        <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
           <Col span={24}>
-            <div className="flex items-center justify-between">
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '16px'
+            }}>
               <Title level={3} style={{ margin: 0 }}>
                 Teacher Allocation Report
               </Title>
-              <Space>
+              <Space wrap>
                 <Select 
                   value={selectedFaculty} 
                   onChange={setSelectedFaculty} 
                   style={{ width: 200 }}
+                  placeholder="Select Faculty"
                 >
                   <Option value="all">All Faculties</Option>
                   {facultyList.map(faculty => (
@@ -356,13 +371,13 @@ const TeacherAllocationReport = () => {
           </Col>
         </Row>
 
-        <Row gutter={[16, 16]} className="mb-4">
+        <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
           <Col xs={24} sm={8}>
             <Card>
               <Statistic
                 title="Total Teachers"
                 value={filteredAllocations.length}
-                valueStyle={{ color: '#40a9ff' }}
+                valueStyle={{ color: '#1890ff' }}
               />
             </Card>
           </Col>
@@ -372,11 +387,14 @@ const TeacherAllocationReport = () => {
                 title="Average Workload"
                 value={
                   filteredAllocations.length > 0 
-                    ? Math.round(filteredAllocations.reduce((sum, item) => sum + item.workloadPercentage, 0) / filteredAllocations.length) 
+                    ? Math.round(filteredAllocations.reduce((sum, item) => {
+                        const workload = item.workloadPercentage || 0;
+                        return sum + (isNaN(workload) ? 0 : workload);
+                      }, 0) / filteredAllocations.length) 
                     : 0
                 }
                 suffix="%"
-                valueStyle={{ color: '#40a9ff' }}
+                valueStyle={{ color: '#1890ff' }}
               />
             </Card>
           </Col>
@@ -384,15 +402,24 @@ const TeacherAllocationReport = () => {
             <Card>
               <Statistic
                 title="Total Teaching Hours"
-                value={filteredAllocations.reduce((sum, item) => sum + item.workloadHours, 0)}
-                valueStyle={{ color: '#40a9ff' }}
+                value={filteredAllocations.reduce((sum, item) => {
+                  const hours = item.workloadHours || 0;
+                  return sum + (isNaN(hours) ? 0 : hours);
+                }, 0)}
+                valueStyle={{ color: '#1890ff' }}
               />
             </Card>
           </Col>
         </Row>
 
         {filteredAllocations.every(item => item.totalSlots === 0) && (
-          <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded">
+          <div style={{ 
+            marginBottom: '24px', 
+            padding: '16px', 
+            backgroundColor: '#fffbe6', 
+            border: '1px solid #ffe58f', 
+            borderRadius: '6px'
+          }}>
             <Text type="warning">
               <strong>Note:</strong> No published timetable found. Showing teacher list with zero allocations. 
               Please publish a timetable to see actual allocation data.
@@ -409,43 +436,119 @@ const TeacherAllocationReport = () => {
             scroll={{ x: 'max-content' }}
           />
         ) : (
-          <div style={{ height: 400, marginTop: 20 }}>
-            {filteredAllocations.length > 0 ? (
-              <Bar
-                data={getChartData()}
-                xField="workload"
-                yField="teacher"
-                seriesField="teacher"
-                legend={{ position: 'top-right' }}
-                colorField="teacher"
-                theme="light"
-                barStyle={{ fill: '#1890ff' }}
-                label={{
-                  position: 'right',
-                  content: (item) => `${Math.round(item.workload)}%`,
-                  style: { fill: '#000' }
-                }}
-                yAxis={{
-                  label: {
-                    style: { fill: '#000' }
-                  }
-                }}
-                xAxis={{
-                  label: {
-                    style: { fill: '#000' }
-                  },
-                  title: {
-                    text: 'Workload Percentage',
-                    style: { fill: '#000' }
-                  }
-                }}
-              />
-            ) : (
-              <div className="flex items-center justify-center h-full">
-                <Text>No data available</Text>
-              </div>
-            )}
-          </div>
+          <Card title="Teacher Workload Distribution" style={{ marginTop: '24px' }}>
+            <div style={{ height: '500px', padding: '20px' }}>
+              {filteredAllocations.length > 0 ? (
+                <Column
+                  data={getChartData()}
+                  xField="teacher"
+                  yField="workload"
+                  height={450}
+                  columnStyle={{
+                    fill: '#1890ff',
+                    fillOpacity: 0.8,
+                  }}
+                  label={{
+                    position: 'top',
+                    style: {
+                      fill: '#000',
+                      fontSize: 12,
+                    },
+                    formatter: (datum) => {
+                      const value = datum.workload || 0;
+                      return isNaN(value) ? '0%' : `${Math.round(value)}%`;
+                    },
+                  }}
+                  xAxis={{
+                    type: 'cat',
+                    label: {
+                      autoRotate: true,
+                      autoHide: false,
+                      style: {
+                        fontSize: 11,
+                        fill: '#666',
+                      },
+                    },
+                    title: {
+                      text: 'Teachers',
+                      style: {
+                        fontSize: 14,
+                        fill: '#333',
+                        fontWeight: 'bold',
+                      },
+                    },
+                  }}
+                  yAxis={{
+                    type: 'linear',
+                    min: 0,
+                    max: 100,
+                    label: {
+                      formatter: (val) => {
+                        const value = parseFloat(val);
+                        return isNaN(value) ? '0%' : `${Math.round(value)}%`;
+                      },
+                      style: {
+                        fontSize: 11,
+                        fill: '#666',
+                      },
+                    },
+                    title: {
+                      text: 'Workload Percentage (%)',
+                      style: {
+                        fontSize: 14,
+                        fill: '#333',
+                        fontWeight: 'bold',
+                      },
+                    },
+                    grid: {
+                      line: {
+                        style: {
+                          stroke: '#f0f0f0',
+                          lineWidth: 1,
+                        },
+                      },
+                    },
+                  }}
+                  tooltip={{
+                    formatter: (datum) => {
+                      const value = datum.workload || 0;
+                      return {
+                        name: 'Workload',
+                        value: isNaN(value) ? '0%' : `${Math.round(value)}%`,
+                      };
+                    },
+                  }}
+                  meta={{
+                    workload: {
+                      alias: 'Workload Percentage',
+                      formatter: (val) => {
+                        const value = parseFloat(val);
+                        return isNaN(value) ? '0%' : `${Math.round(value)}%`;
+                      },
+                    },
+                    teacher: {
+                      alias: 'Teacher Name',
+                    },
+                  }}
+                />
+              ) : (
+                <div style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  height: '100%',
+                  flexDirection: 'column'
+                }}>
+                  <Text type="secondary" style={{ fontSize: '16px' }}>
+                    No data available for chart view
+                  </Text>
+                  <Text type="secondary">
+                    Please ensure teachers have been assigned to subjects in the timetable.
+                  </Text>
+                </div>
+              )}
+            </div>
+          </Card>
         )}
       </Card>
     </div>

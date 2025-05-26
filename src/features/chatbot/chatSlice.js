@@ -4,9 +4,23 @@ import * as api from './chat.api';
 // Async thunks
 export const sendChatMessage = createAsyncThunk(
   'chat/sendMessage',
-  async ({ message, conversationId }, { rejectWithValue }) => {
+  async ({ message, conversationId, context }, { rejectWithValue, getState }) => {
     try {
-      const response = await api.sendChatMessage(message, conversationId);
+      // Get user info from auth state if available
+      const state = getState();
+      const user = state.auth?.user;
+      
+      // Prepare context with current page and user role
+      const enhancedContext = {
+        currentPage: window.location.pathname,
+        userRole: user?.role || context?.userRole || localStorage.getItem('userRole') || 'student',
+        userId: user?.id || context?.userId || localStorage.getItem('userId') || 'anonymous',
+        ...context
+      };
+      
+      console.log('Sending message with enhanced context:', enhancedContext);
+      
+      const response = await api.sendChatMessage(message, conversationId, enhancedContext);
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data || error.message);

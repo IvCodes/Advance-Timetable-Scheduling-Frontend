@@ -22,6 +22,7 @@ import {
   Select,
   InputNumber,
   Popconfirm,
+  Alert,
 } from "antd";
 import {
   FileTextOutlined,
@@ -34,6 +35,7 @@ import {
   DownOutlined,
   UpOutlined,
   DeleteOutlined,
+  RocketOutlined,
 } from "@ant-design/icons";
 import {
   getSliitTimetables,
@@ -763,6 +765,88 @@ const ViewSliitTimetable = () => {
                         </div>
                       </Descriptions.Item>
                     </Descriptions>
+                  </Tabs.TabPane>
+
+                  <Tabs.TabPane
+                    tab={
+                      <span>
+                        <RocketOutlined /> Enhanced Features
+                      </span>
+                    }
+                    key="enhanced"
+                  >
+                    <Card title="Enhanced Timetable Features" bordered={false}>
+                      <Row gutter={[16, 16]}>
+                        <Col span={24}>
+                          <Alert
+                            message="Enhanced Exam Timetables Available"
+                            description="Access the new Enhanced Exams section for advanced timetable generation with student ID mappings, beautiful HTML visualization, and comprehensive algorithm testing."
+                            type="info"
+                            showIcon
+                            style={{ marginBottom: 16 }}
+                          />
+                        </Col>
+                      </Row>
+                      
+                      <Row gutter={[16, 16]}>
+                        <Col xs={24} md={12}>
+                          <Card size="small" title="🎓 Student ID Mappings">
+                            <Text>
+                              • Unique student IDs (IT21259852, IT21259853, etc.)<br/>
+                              • Student-to-activity mappings<br/>
+                              • Group-to-student relationships<br/>
+                              • Activity-to-student assignments
+                            </Text>
+                          </Card>
+                        </Col>
+                        
+                        <Col xs={24} md={12}>
+                          <Card size="small" title="🎨 Enhanced HTML Generation">
+                            <Text>
+                              • Beautiful, responsive HTML timetables<br/>
+                              • Interactive student information display<br/>
+                              • Modern design with statistics dashboard<br/>
+                              • Mobile-friendly visualization
+                            </Text>
+                          </Card>
+                        </Col>
+                        
+                        <Col xs={24} md={12}>
+                          <Card size="small" title="🚀 Advanced Algorithms">
+                            <Text>
+                              • Multiple run modes (Quick, Standard, Full)<br/>
+                              • Batch algorithm execution<br/>
+                              • Real-time progress tracking<br/>
+                              • Comprehensive result analysis
+                            </Text>
+                          </Card>
+                        </Col>
+                        
+                        <Col xs={24} md={12}>
+                          <Card size="small" title="📊 File Management">
+                            <Text>
+                              • Automatic HTML generation<br/>
+                              • Download and view capabilities<br/>
+                              • File organization and cleanup<br/>
+                              • Version tracking with timestamps
+                            </Text>
+                          </Card>
+                        </Col>
+                      </Row>
+                      
+                      <Divider />
+                      
+                      <div style={{ textAlign: 'center' }}>
+                        <Button 
+                          type="primary" 
+                          size="large"
+                          icon={<RocketOutlined />}
+                          onClick={() => window.location.href = '/admin/timetable/exams'}
+                        >
+                          Access Enhanced Exams Section
+                        </Button>
+                      </div>
+                    </Card>
                   </Tabs.TabPane>
                 </Tabs>
               </Card>

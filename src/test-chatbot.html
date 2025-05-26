@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced Chatbot Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .test-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .page-context {
+            background: #e6f7ff;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            border-left: 4px solid #1890ff;
+        }
+        .test-button {
+            background: #1890ff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+        }
+        .test-button:hover {
+            background: #40a9ff;
+        }
+        .response-area {
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 15px;
+            min-height: 100px;
+            border: 1px solid #d9d9d9;
+        }
+        .loading {
+            color: #1890ff;
+            font-style: italic;
+        }
+        .error {
+            color: #ff4d4f;
+            background: #fff2f0;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #ffccc7;
+        }
+        .success {
+            color: #52c41a;
+            background: #f6ffed;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #b7eb8f;
+        }
+        .suggestions {
+            margin-top: 10px;
+        }
+        .suggestion-btn {
+            background: #f0f0f0;
+            border: 1px solid #d9d9d9;
+            padding: 5px 10px;
+            border-radius: 15px;
+            margin: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .suggestion-btn:hover {
+            background: #1890ff;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>🤖 Enhanced Chatbot Test</h1>
+        <p>This page tests the application-aware chatbot system with different page contexts and user roles.</p>
+        
+        <div class="page-context">
+            <h3>Current Context</h3>
+            <p><strong>Page:</strong> <span id="current-page">/admin/reports/teacher-allocation</span></p>
+            <p><strong>User Role:</strong> <span id="current-role">admin</span></p>
+            <p><strong>User ID:</strong> <span id="current-user">test-admin-123</span></p>
+        </div>
+
+        <div>
+            <h3>🎯 Context Settings</h3>
+            <button class="test-button" onclick="setContext('/admin/reports/teacher-allocation', 'admin')">
+                Teacher Allocation Page (Admin)
+            </button>
+            <button class="test-button" onclick="setContext('/admin/reports/space-occupancy', 'admin')">
+                Space Occupancy Page (Admin)
+            </button>
+            <button class="test-button" onclick="setContext('/faculty/dashboard', 'faculty')">
+                Faculty Dashboard
+            </button>
+            <button class="test-button" onclick="setContext('/student/dashboard', 'student')">
+                Student Dashboard
+            </button>
+        </div>
+
+        <div>
+            <h3>💬 Test Queries</h3>
+            <button class="test-button" onclick="testQuery('What does workload percentage mean?')">
+                "What does workload percentage mean?"
+            </button>
+            <button class="test-button" onclick="testQuery('How is occupancy rate calculated?')">
+                "How is occupancy rate calculated?"
+            </button>
+            <button class="test-button" onclick="testQuery('Explain features')">
+                "Explain features"
+            </button>
+            <button class="test-button" onclick="testQuery('Show my schedule')">
+                "Show my schedule"
+            </button>
+            <button class="test-button" onclick="testQuery('Help me')">
+                "Help me"
+            </button>
+            <button class="test-button" onclick="testQuery('What is genetic algorithm?')">
+                "What is genetic algorithm?"
+            </button>
+        </div>
+
+        <div>
+            <h3>📝 Custom Query</h3>
+            <input type="text" id="custom-query" placeholder="Type your question here..." style="width: 70%; padding: 8px; border: 1px solid #d9d9d9; border-radius: 4px;">
+            <button class="test-button" onclick="testCustomQuery()">Send</button>
+        </div>
+
+        <div class="response-area" id="response-area">
+            <p style="color: #999;">Click a test button to see the enhanced chatbot response...</p>
+        </div>
+    </div>
+
+    <script>
+        let currentPage = '/admin/reports/teacher-allocation';
+        let currentRole = 'admin';
+        let currentUser = 'test-admin-123';
+        let conversationId = null;
+
+        function setContext(page, role) {
+            currentPage = page;
+            currentRole = role;
+            
+            document.getElementById('current-page').textContent = page;
+            document.getElementById('current-role').textContent = role;
+            
+            // Update URL to simulate page navigation
+            window.history.pushState({}, '', page);
+            
+            showMessage(`Context updated to: ${page} (${role})`, 'success');
+        }
+
+        function showMessage(message, type = 'info') {
+            const responseArea = document.getElementById('response-area');
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : '';
+            responseArea.innerHTML = `<div class="${className}">${message}</div>`;
+        }
+
+        function showLoading() {
+            const responseArea = document.getElementById('response-area');
+            responseArea.innerHTML = '<div class="loading">🤔 Thinking...</div>';
+        }
+
+        function showResponse(data) {
+            const responseArea = document.getElementById('response-area');
+            let html = `
+                <div>
+                    <h4>🤖 Assistant Response:</h4>
+                    <p>${data.message}</p>
+                    <p><small><strong>Conversation ID:</strong> ${data.conversation_id}</small></p>
+                </div>
+            `;
+            
+            if (data.suggestions && data.suggestions.length > 0) {
+                html += `
+                    <div class="suggestions">
+                        <h5>💡 Suggestions:</h5>
+                        ${data.suggestions.map(s => `<button class="suggestion-btn" onclick="testQuery('${s}')">${s}</button>`).join('')}
+                    </div>
+                `;
+            }
+            
+            responseArea.innerHTML = html;
+        }
+
+        async function testQuery(message) {
+            showLoading();
+            
+            try {
+                const response = await fetch('http://localhost:8000/api/v1/chatbot/message', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        user_id: currentUser,
+                        current_page: currentPage,
+                        user_role: currentRole,
+                        conversation_id: conversationId
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                conversationId = data.conversation_id;
+                showResponse(data);
+                
+            } catch (error) {
+                console.error('Error:', error);
+                showMessage(`Error: ${error.message}`, 'error');
+            }
+        }
+
+        function testCustomQuery() {
+            const input = document.getElementById('custom-query');
+            const query = input.value.trim();
+            if (query) {
+                testQuery(query);
+                input.value = '';
+            }
+        }
+
+        // Allow Enter key in custom query input
+        document.getElementById('custom-query').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                testCustomQuery();
+            }
+        });
+
+        // Set initial context
+        window.history.pushState({}, '', currentPage);
+    </script>
+</body>
+</html> 

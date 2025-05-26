@@ -9,18 +9,37 @@ import axios from 'axios';
 const API_URL = 'http://localhost:8000';
 
 /**
- * Send a chat message to the backend
+ * Send a chat message to the backend with full context awareness
  * @param {string} message - The message to send
  * @param {string} conversationId - Optional conversation ID for continuing a conversation
+ * @param {Object} context - Optional context information for application-aware responses
  * @returns {Promise} - Promise that resolves to the chat response
  */
-export const sendChatMessage = async (message, conversationId = null) => {
+export const sendChatMessage = async (message, conversationId = null, context = {}) => {
   try {
-    // Call the chat API without requiring authentication
+    // Get current page context
+    const currentPage = context.currentPage || window.location.pathname;
+    
+    // Get user role from localStorage or context
+    const userRole = context.userRole || localStorage.getItem('userRole') || 'student';
+    
+    // Get user ID
+    const userId = context.userId || localStorage.getItem('userId') || 'anonymous';
+    
+    console.log('Sending chat message with context:', {
+      message,
+      currentPage,
+      userRole,
+      userId
+    });
+    
+    // Call the enhanced chat API with full context
     const response = await axios.post(`${API_URL}/api/v1/chatbot/message`, {
       message,
       conversation_id: conversationId,
-      user_id: localStorage.getItem('userId') || 'anonymous'
+      user_id: userId,
+      current_page: currentPage,  // 🆕 Page context for application awareness
+      user_role: userRole         // 🆕 Role-based personalization
     });
     
     return response;
