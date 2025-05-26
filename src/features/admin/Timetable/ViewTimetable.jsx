@@ -100,11 +100,13 @@ const ViewTimetable = () => {
       // Try LLM first if backend evaluation is available
       if (evaluation && evaluation.scores) {
         try {
+          console.log("Sending evaluation scores to LLM:", evaluation.scores);
           const result = await llmResponse(evaluation.scores);
           setNlResponse(result);
           return;
         } catch (error) {
           console.error("LLM request failed, falling back to offline recommendation:", error);
+          console.error("Error details:", error.response?.data || error.message);
         }
       }
       
@@ -254,9 +256,9 @@ const ViewTimetable = () => {
 
       algorithmResults[algorithm] = {
         average_score: overallScore,
-        conflicts: avgConflicts < 2 ? "Low" : avgConflicts < 5 ? "Medium" : "High",
-        room_utilization: avgUtilization > 75 ? "High" : avgUtilization > 50 ? "Medium" : "Low",
-        period_distribution: avgDistribution > 75 ? "High" : avgDistribution > 50 ? "Medium" : "Low"
+        conflicts: avgConflicts,
+        room_utilization: avgUtilization,
+        period_distribution: avgDistribution
       };
     });
 
@@ -366,12 +368,15 @@ const ViewTimetable = () => {
     scores.forEach(({ algorithm, score, name, data }) => {
       if (!data) return;
       
+      const conflicts = typeof data.conflicts === 'number' ? data.conflicts : 0;
+      const utilization = typeof data.room_utilization === 'number' ? data.room_utilization : 0;
+      
       if (score > 80) {
-        recommendations.push(`${name} shows excellent performance with ${data.conflicts?.toLowerCase() || 'manageable'} conflicts and ${data.room_utilization?.toLowerCase() || 'good'} room utilization.`);
+        recommendations.push(`${name} shows excellent performance with ${conflicts.toFixed(1)} conflicts and ${utilization.toFixed(1)}% room utilization.`);
       } else if (score > 60) {
-        recommendations.push(`${name} shows good performance but could be improved in areas like ${data.conflicts === 'High' ? 'conflict resolution' : 'resource utilization'}.`);
+        recommendations.push(`${name} shows good performance but could be improved in areas like ${conflicts > 5 ? 'conflict resolution' : 'resource utilization'}.`);
       } else if (score > 0) {
-        recommendations.push(`${name} needs optimization, particularly in ${data.conflicts === 'High' ? 'reducing conflicts' : 'improving efficiency'}.`);
+        recommendations.push(`${name} needs optimization, particularly in ${conflicts > 5 ? 'reducing conflicts' : 'improving efficiency'}.`);
       } else {
         recommendations.push(`${name} requires significant improvement across all metrics.`);
       }
@@ -405,18 +410,30 @@ const ViewTimetable = () => {
   // Function to get evaluation data (backend first, then offline fallback)
   const getEvaluationData = () => {
     if (evaluation && evaluation.scores) {
-      // Convert backend evaluation data to our format
+      // Check if backend evaluation data is in new detailed format
       const backendEval = {};
       algorithms.forEach(algorithm => {
         if (evaluation.scores[algorithm]) {
-          const scores = evaluation.scores[algorithm];
-          const avgScore = scores.reduce((sum, score) => sum + score, 0) / scores.length;
-          backendEval[algorithm] = {
-            average_score: avgScore,
-            conflicts: avgScore > 25 ? "Low" : avgScore > 20 ? "Medium" : "High",
-            room_utilization: avgScore > 25 ? "High" : avgScore > 20 ? "Medium" : "Low",
-            period_distribution: avgScore > 25 ? "High" : avgScore > 20 ? "Medium" : "Low"
-          };
+          const algorithmData = evaluation.scores[algorithm];
+          
+          if (Array.isArray(algorithmData)) {
+            // Legacy format: array of scores
+            const avgScore = algorithmData.reduce((sum, score) => sum + score, 0) / algorithmData.length;
+            backendEval[algorithm] = {
+              average_score: avgScore,
+              conflicts: Math.max(0, (100 - avgScore) / 10), // Estimate
+              room_utilization: avgScore * 0.8, // Estimate
+              period_distribution: avgScore * 0.9 // Estimate
+            };
+          } else if (typeof algorithmData === 'object') {
+            // New format: detailed metrics object
+            backendEval[algorithm] = {
+              average_score: algorithmData.average_score || 0,
+              conflicts: algorithmData.conflicts || 0,
+              room_utilization: algorithmData.room_utilization || 0,
+              period_distribution: algorithmData.period_distribution || 0
+            };
+          }
         }
       });
       return backendEval;
@@ -563,124 +580,176 @@ const ViewTimetable = () => {
           </div>
           
           {/* Use Ant Design Tabs to match the rest of the UI */}
-          <Tabs 
-            defaultActiveKey="1" 
-            type="card"
-            className="custom-evaluation-tabs"
-            items={[
-              {
-                key: '1',
-                label: (
-                  <span>
-                    <ExperimentOutlined /> Genetic Algorithm (NSGAII)
-                  </span>
-                ),
-                children: (
-                  <div className="p-4 bg-[#1a2639] rounded-b-lg">
-                    <div className="text-center mb-4">
-                      <Typography.Title level={2} className="text-white m-0">
-                        {getEvaluationData()?.GA?.average_score?.toFixed(1) || "N/A"}
-                      </Typography.Title>
-                    </div>
-                    <Row gutter={[16, 16]} className="text-white">
-                      <Col span={8}>
-                        <div className="text-center">
-                          <div className="text-gray-300 mb-1">Conflicts</div>
-                          <div className="font-semibold">{getEvaluationData()?.GA?.conflicts || "N/A"}</div>
-                        </div>
-                      </Col>
-                      <Col span={8}>
-                        <div className="text-center">
-                          <div className="text-gray-300 mb-1">Room Utilization</div>
-                          <div className="font-semibold">{getEvaluationData()?.GA?.room_utilization || "N/A"}</div>
-                        </div>
-                      </Col>
-                      <Col span={8}>
-                        <div className="text-center">
-                          <div className="text-gray-300 mb-1">Period Distribution</div>
-                          <div className="font-semibold">{getEvaluationData()?.GA?.period_distribution || "N/A"}</div>
-                        </div>
-                      </Col>
-                    </Row>
-                  </div>
-                ),
+          <ConfigProvider
+            theme={{
+              components: {
+                Typography: {
+                  colorText: "#ffffff",
+                  colorTextHeading: "#ffffff",
+                },
+                Tabs: {
+                  itemColor: "#9ca3af", // Gray color for unselected tabs
+                  itemHoverColor: "#d1d5db", // Light gray on hover
+                  itemSelectedColor: "#1f2937", // Dark color for selected tab (visible on white background)
+                },
               },
-              {
-                key: '2',
-                label: (
-                  <span>
-                    <BulbOutlined /> Ant Colony Optimization
-                  </span>
-                ),
-                children: (
-                  <div className="p-4 bg-[#1a2639] rounded-b-lg">
-                    <div className="text-center mb-4">
-                      <Typography.Title level={2} className="text-white m-0">
-                        {getEvaluationData()?.CO?.average_score?.toFixed(1) || "N/A"}
-                      </Typography.Title>
+            }}
+          >
+            <Tabs 
+              defaultActiveKey="1" 
+              type="card"
+              className="custom-evaluation-tabs"
+              items={[
+                {
+                  key: '1',
+                  label: (
+                    <span>
+                      <ExperimentOutlined /> Genetic Algorithm (NSGAII)
+                    </span>
+                  ),
+                  children: (
+                    <div className="p-4 bg-[#1a2639] rounded-b-lg">
+                      <div className="text-center mb-4">
+                        <Typography.Title level={2} style={{ color: '#ffffff', margin: 0 }}>
+                          {getEvaluationData()?.GA?.average_score?.toFixed(1) || "N/A"}
+                        </Typography.Title>
+                      </div>
+                      <Row gutter={[16, 16]} className="text-white">
+                        <Col span={8}>
+                          <div className="text-center">
+                            <div className="mb-1" style={{ color: '#9ca3af' }}>Conflicts</div>
+                            <div className="font-semibold" style={{ color: '#ffffff' }}>
+                              {getEvaluationData()?.GA?.conflicts !== undefined 
+                                ? `${getEvaluationData().GA.conflicts.toFixed(1)}` 
+                                : "N/A"}
+                            </div>
+                          </div>
+                        </Col>
+                        <Col span={8}>
+                          <div className="text-center">
+                            <div className="mb-1" style={{ color: '#9ca3af' }}>Room Utilization</div>
+                            <div className="font-semibold" style={{ color: '#ffffff' }}>
+                              {getEvaluationData()?.GA?.room_utilization !== undefined 
+                                ? `${getEvaluationData().GA.room_utilization.toFixed(1)}%` 
+                                : "N/A"}
+                            </div>
+                          </div>
+                        </Col>
+                        <Col span={8}>
+                          <div className="text-center">
+                            <div className="mb-1" style={{ color: '#9ca3af' }}>Period Distribution</div>
+                            <div className="font-semibold" style={{ color: '#ffffff' }}>
+                              {getEvaluationData()?.GA?.period_distribution !== undefined 
+                                ? `${getEvaluationData().GA.period_distribution.toFixed(1)}%` 
+                                : "N/A"}
+                            </div>
+                          </div>
+                        </Col>
+                      </Row>
                     </div>
-                    <Row gutter={[16, 16]} className="text-white">
-                      <Col span={8}>
-                        <div className="text-center">
-                          <div className="text-gray-300 mb-1">Conflicts</div>
-                          <div className="font-semibold">{getEvaluationData()?.CO?.conflicts || "N/A"}</div>
-                        </div>
-                      </Col>
-                      <Col span={8}>
-                        <div className="text-center">
-                          <div className="text-gray-300 mb-1">Room Utilization</div>
-                          <div className="font-semibold">{getEvaluationData()?.CO?.room_utilization || "N/A"}</div>
-                        </div>
-                      </Col>
-                      <Col span={8}>
-                        <div className="text-center">
-                          <div className="text-gray-300 mb-1">Period Distribution</div>
-                          <div className="font-semibold">{getEvaluationData()?.CO?.period_distribution || "N/A"}</div>
-                        </div>
-                      </Col>
-                    </Row>
-                  </div>
-                ),
-              },
-              {
-                key: '3',
-                label: (
-                  <span>
-                    <RobotOutlined /> Reinforcement Learning
-                  </span>
-                ),
-                children: (
-                  <div className="p-4 bg-[#1a2639] rounded-b-lg">
-                    <div className="text-center mb-4">
-                      <Typography.Title level={2} className="text-white m-0">
-                        {getEvaluationData()?.RL?.average_score?.toFixed(1) || "N/A"}
-                      </Typography.Title>
+                  ),
+                },
+                {
+                  key: '2',
+                  label: (
+                    <span>
+                      <BulbOutlined /> Ant Colony Optimization
+                    </span>
+                  ),
+                  children: (
+                    <div className="p-4 bg-[#1a2639] rounded-b-lg">
+                      <div className="text-center mb-4">
+                        <Typography.Title level={2} style={{ color: '#ffffff', margin: 0 }}>
+                          {getEvaluationData()?.CO?.average_score?.toFixed(1) || "N/A"}
+                        </Typography.Title>
+                      </div>
+                      <Row gutter={[16, 16]} className="text-white">
+                        <Col span={8}>
+                          <div className="text-center">
+                            <div className="mb-1" style={{ color: '#9ca3af' }}>Conflicts</div>
+                            <div className="font-semibold" style={{ color: '#ffffff' }}>
+                              {getEvaluationData()?.CO?.conflicts !== undefined 
+                                ? `${getEvaluationData().CO.conflicts.toFixed(1)}` 
+                                : "N/A"}
+                            </div>
+                          </div>
+                        </Col>
+                        <Col span={8}>
+                          <div className="text-center">
+                            <div className="mb-1" style={{ color: '#9ca3af' }}>Room Utilization</div>
+                            <div className="font-semibold" style={{ color: '#ffffff' }}>
+                              {getEvaluationData()?.CO?.room_utilization !== undefined 
+                                ? `${getEvaluationData().CO.room_utilization.toFixed(1)}%` 
+                                : "N/A"}
+                            </div>
+                          </div>
+                        </Col>
+                        <Col span={8}>
+                          <div className="text-center">
+                            <div className="mb-1" style={{ color: '#9ca3af' }}>Period Distribution</div>
+                            <div className="font-semibold" style={{ color: '#ffffff' }}>
+                              {getEvaluationData()?.CO?.period_distribution !== undefined 
+                                ? `${getEvaluationData().CO.period_distribution.toFixed(1)}%` 
+                                : "N/A"}
+                            </div>
+                          </div>
+                        </Col>
+                      </Row>
                     </div>
-                    <Row gutter={[16, 16]} className="text-white">
-                      <Col span={8}>
-                        <div className="text-center">
-                          <div className="text-gray-300 mb-1">Conflicts</div>
-                          <div className="font-semibold">{getEvaluationData()?.RL?.conflicts || "N/A"}</div>
-                        </div>
-                      </Col>
-                      <Col span={8}>
-                        <div className="text-center">
-                          <div className="text-gray-300 mb-1">Room Utilization</div>
-                          <div className="font-semibold">{getEvaluationData()?.RL?.room_utilization || "N/A"}</div>
-                        </div>
-                      </Col>
-                      <Col span={8}>
-                        <div className="text-center">
-                          <div className="text-gray-300 mb-1">Period Distribution</div>
-                          <div className="font-semibold">{getEvaluationData()?.RL?.period_distribution || "N/A"}</div>
-                        </div>
-                      </Col>
-                    </Row>
-                  </div>
-                ),
-              },
-            ]}
-          />
+                  ),
+                },
+                {
+                  key: '3',
+                  label: (
+                    <span>
+                      <RobotOutlined /> Reinforcement Learning
+                    </span>
+                  ),
+                  children: (
+                    <div className="p-4 bg-[#1a2639] rounded-b-lg">
+                      <div className="text-center mb-4">
+                        <Typography.Title level={2} style={{ color: '#ffffff', margin: 0 }}>
+                          {getEvaluationData()?.RL?.average_score?.toFixed(1) || "N/A"}
+                        </Typography.Title>
+                      </div>
+                      <Row gutter={[16, 16]} className="text-white">
+                        <Col span={8}>
+                          <div className="text-center">
+                            <div className="mb-1" style={{ color: '#9ca3af' }}>Conflicts</div>
+                            <div className="font-semibold" style={{ color: '#ffffff' }}>
+                              {getEvaluationData()?.RL?.conflicts !== undefined 
+                                ? `${getEvaluationData().RL.conflicts.toFixed(1)}` 
+                                : "N/A"}
+                            </div>
+                          </div>
+                        </Col>
+                        <Col span={8}>
+                          <div className="text-center">
+                            <div className="mb-1" style={{ color: '#9ca3af' }}>Room Utilization</div>
+                            <div className="font-semibold" style={{ color: '#ffffff' }}>
+                              {getEvaluationData()?.RL?.room_utilization !== undefined 
+                                ? `${getEvaluationData().RL.room_utilization.toFixed(1)}%` 
+                                : "N/A"}
+                            </div>
+                          </div>
+                        </Col>
+                        <Col span={8}>
+                          <div className="text-center">
+                            <div className="mb-1" style={{ color: '#9ca3af' }}>Period Distribution</div>
+                            <div className="font-semibold" style={{ color: '#ffffff' }}>
+                              {getEvaluationData()?.RL?.period_distribution !== undefined 
+                                ? `${getEvaluationData().RL.period_distribution.toFixed(1)}%` 
+                                : "N/A"}
+                            </div>
+                          </div>
+                        </Col>
+                      </Row>
+                    </div>
+                  ),
+                },
+              ]}
+            />
+          </ConfigProvider>
           
           {/* AI Recommendation */}
           <div className="mt-6">

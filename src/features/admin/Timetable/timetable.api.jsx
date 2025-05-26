@@ -170,9 +170,12 @@ export const removeSubstitute = createAsyncThunk(
 
 export const llmResponse = async (scores) => {
   try {
+    // Transform the scores data to the expected format
+    const transformedScores = transformScoresForAPI(scores);
+    
     // Use the new backend endpoint for algorithm evaluation
     const response = await api.post("/timetable/evaluate-algorithms", {
-      scores: scores
+      scores: transformedScores
     });
     
     // The backend will return the analysis from DeepSeek
@@ -182,6 +185,47 @@ export const llmResponse = async (scores) => {
     // Throw the error so the calling code can handle it with offline fallback
     throw new Error("LLM service unavailable");
   }
+};
+
+// Transform evaluation scores from backend format to API format
+const transformScoresForAPI = (evaluationScores) => {
+  const transformedScores = {};
+  
+  // Check if evaluationScores is in the expected format
+  if (!evaluationScores || typeof evaluationScores !== 'object') {
+    console.warn("Invalid evaluation scores format:", evaluationScores);
+    return {};
+  }
+  
+  // Transform each algorithm's scores
+  for (const [algorithm, scoreData] of Object.entries(evaluationScores)) {
+    if (Array.isArray(scoreData)) {
+      // Legacy format: array of scores - estimate metrics
+      const scores = scoreData.filter(score => typeof score === 'number' && !isNaN(score));
+      
+      if (scores.length > 0) {
+        const averageScore = scores.reduce((sum, score) => sum + score, 0) / scores.length;
+        
+        transformedScores[algorithm] = {
+          average_score: parseFloat(averageScore.toFixed(2)),
+          conflicts: parseFloat((Math.max(0, (100 - averageScore) / 10)).toFixed(1)),
+          room_utilization: parseFloat((averageScore * 0.8).toFixed(1)),
+          period_distribution: parseFloat((averageScore * 0.9).toFixed(1))
+        };
+      }
+    } else if (typeof scoreData === 'object' && scoreData !== null) {
+      // New format: object with detailed metrics - use directly
+      transformedScores[algorithm] = {
+        average_score: parseFloat((scoreData.average_score || 0).toFixed(2)),
+        conflicts: parseFloat((scoreData.conflicts || 0).toFixed(1)),
+        room_utilization: parseFloat((scoreData.room_utilization || 0).toFixed(1)),
+        period_distribution: parseFloat((scoreData.period_distribution || 0).toFixed(1))
+      };
+    }
+  }
+  
+  console.log("Transformed scores for API:", transformedScores);
+  return transformedScores;
 };
 
 export const formatScoresForAPI = (evaluation) => {
