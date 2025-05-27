@@ -1,7 +1,7 @@
 import axios from "axios";
 
 export default function makeApi() {
-  const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
+  const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1/";
   console.log("API URL:", apiUrl);
   
   const instance = axios.create({

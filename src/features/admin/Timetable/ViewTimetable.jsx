@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
-import { Table, ConfigProvider, Tabs, Popover, Spin, Button, Card, Typography, Badge, Divider, Row, Col } from "antd";
-import { ExperimentOutlined, BulbOutlined, RobotOutlined } from "@ant-design/icons";
+import { Table, ConfigProvider, Tabs, Popover, Spin, Button, Card, Typography, Badge, Divider, Row, Col, Modal, Form, Select, message } from "antd";
+import { ExperimentOutlined, BulbOutlined, RobotOutlined, EditOutlined, UserOutlined } from "@ant-design/icons";
 import {
   getDays,
   getPeriods,
@@ -17,6 +17,8 @@ import {
   publishTimetable,
   getPublishedTimetable,
 } from "./timetable.api";
+import FacultyAvailabilitySelector, { AvailabilityIndicator } from "./FacultyAvailabilityChecker";
+import dayjs from 'dayjs';
 
 const ViewTimetable = () => {
   const { days, periods, subjects, teachers, spaces } = useSelector(
@@ -31,6 +33,11 @@ const ViewTimetable = () => {
   const [publishLoading, setPublishLoading] = useState(false);
   const [publishMessage, setPublishMessage] = useState(null);
   const [offlineEvaluation, setOfflineEvaluation] = useState(null);
+  
+  // Faculty assignment modal state
+  const [assignModalVisible, setAssignModalVisible] = useState(false);
+  const [selectedEntry, setSelectedEntry] = useState(null);
+  const [assignForm] = Form.useForm();
 
   useEffect(() => {
     dispatch(getDays());
@@ -148,10 +155,28 @@ const ViewTimetable = () => {
               </p>
               <p>
                 <strong>Teacher:</strong> {t?.first_name} {t?.last_name}
+                {t && (
+                  <AvailabilityIndicator 
+                    status="available" // You can enhance this to check real-time availability
+                    reason={null}
+                    conflicts={[]}
+                  />
+                )}
               </p>
               <p>
                 <strong>Duration:</strong> {duration} hours
               </p>
+              <Button 
+                size="small" 
+                icon={<EditOutlined />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleEditAssignment(value, day, period);
+                }}
+                style={{ marginTop: 8 }}
+              >
+                Edit Assignment
+              </Button>
             </div>
           );
           return (
@@ -439,6 +464,40 @@ const ViewTimetable = () => {
       return backendEval;
     }
     return offlineEvaluation;
+  };
+
+  // Handle edit assignment
+  const handleEditAssignment = (entryData, day, period) => {
+    setSelectedEntry({
+      ...entryData,
+      day: day,
+      period: period,
+      date: dayjs().format('YYYY-MM-DD') // You can enhance this to get the actual date
+    });
+    
+    assignForm.setFieldsValue({
+      teacher: entryData.teacher
+    });
+    
+    setAssignModalVisible(true);
+  };
+
+  // Handle faculty assignment update
+  const handleAssignmentUpdate = async (values) => {
+    try {
+      // Here you would call the API to update the timetable entry
+      // This is a placeholder - you'll need to implement the actual API call
+      message.success("Faculty assignment updated successfully");
+      setAssignModalVisible(false);
+      setSelectedEntry(null);
+      assignForm.resetFields();
+      
+      // Refresh the timetable data
+      dispatch(getPublishedTimetable());
+    } catch (error) {
+      console.error("Error updating assignment:", error);
+      message.error("Failed to update faculty assignment");
+    }
   };
 
   return (
@@ -767,6 +826,76 @@ const ViewTimetable = () => {
           </div>
         </div>
       )}
+
+      {/* Faculty Assignment Modal */}
+      <Modal
+        title={
+          <span>
+            <UserOutlined /> Edit Faculty Assignment
+          </span>
+        }
+        open={assignModalVisible}
+        onCancel={() => {
+          setAssignModalVisible(false);
+          setSelectedEntry(null);
+          assignForm.resetFields();
+        }}
+        footer={null}
+        width={600}
+      >
+        {selectedEntry && (
+          <Form
+            form={assignForm}
+            layout="vertical"
+            onFinish={handleAssignmentUpdate}
+          >
+            <div style={{ marginBottom: 16 }}>
+              <Typography.Text strong>Assignment Details:</Typography.Text>
+              <div style={{ marginTop: 8, padding: 12, backgroundColor: '#f5f5f5', borderRadius: 6 }}>
+                <p><strong>Subject:</strong> {selectedEntry.subject}</p>
+                <p><strong>Day:</strong> {selectedEntry.day?.long_name}</p>
+                <p><strong>Period:</strong> {selectedEntry.period?.name}</p>
+                <p><strong>Room:</strong> {selectedEntry.room}</p>
+              </div>
+            </div>
+
+            <Form.Item
+              name="teacher"
+              label="Select Faculty Member"
+              rules={[{ required: true, message: 'Please select a faculty member' }]}
+            >
+              <FacultyAvailabilitySelector
+                teachers={teachers || []}
+                date={selectedEntry.date}
+                timeSlot={selectedEntry.period ? {
+                  start_time: selectedEntry.period.start_time,
+                  end_time: selectedEntry.period.end_time,
+                  period_name: selectedEntry.period.name
+                } : null}
+                subjectId={selectedEntry.subject}
+                placeholder="Select faculty member with availability checking"
+              />
+            </Form.Item>
+
+            <Form.Item>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <Button 
+                  onClick={() => {
+                    setAssignModalVisible(false);
+                    setSelectedEntry(null);
+                    assignForm.resetFields();
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button type="primary" htmlType="submit">
+                  Update Assignment
+                </Button>
+              </div>
+            </Form.Item>
+          </Form>
+        )}
+      </Modal>
     </div>
   );
 };

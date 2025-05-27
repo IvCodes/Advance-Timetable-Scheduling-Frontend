@@ -46,9 +46,12 @@ import {
   getTeachers 
 } from "../../admin/DataManagement/data.api";
 import { getFacultyTimetable } from "../../admin/Timetable/timetable.api";
+import FacultyUnavailabilityForm from "./FacultyUnavailabilityForm";
 import dayjs from 'dayjs';
 
-const API_URL = import.meta.env.VITE_API_URL;
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1/";
+// Ensure API_URL ends with a slash
+const normalizedApiUrl = API_URL.endsWith('/') ? API_URL : `${API_URL}/`;
 
 const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
@@ -59,7 +62,7 @@ const getFacultyUnavailableDays = async (facultyId) => {
   try {
     // Call the new faculty-availability API endpoint
     const token = localStorage.getItem('token');
-    const response = await fetch(`${API_URL}faculty-availability/faculty/${facultyId}/unavailable-dates`, {
+    const response = await fetch(`${normalizedApiUrl}faculty-availability/faculty/${facultyId}/unavailable-dates`, {
       headers: {
         'Authorization': `Bearer ${token}`
       }
@@ -183,7 +186,7 @@ const markDayAsUnavailable = async (facultyId, date, reason, unavailabilityType 
     };
     console.log("Request payload:", payload);
     
-    const response = await fetch(`${API_URL}faculty-availability/unavailability-requests`, {
+    const response = await fetch(`${normalizedApiUrl}faculty-availability/unavailability-requests`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -274,6 +277,7 @@ const FacultyDashboard = () => {
   const timetableRef = useRef(null);
   const availabilityRef = useRef(null);
   const currentClassesRef = useRef(null);
+  const unavailabilityFormRef = useRef(null);
   
   // Faculty state
   const [facultyId, setFacultyId] = useState(null);
@@ -323,6 +327,12 @@ const FacultyDashboard = () => {
       href: "#availability", 
       text: "My Availability",
       onClick: () => scrollToRef(availabilityRef)
+    },
+    { 
+      id: 5, 
+      href: "#unavailability-form", 
+      text: "Request Unavailability",
+      onClick: () => scrollToRef(unavailabilityFormRef)
     }
   ];
   
@@ -908,7 +918,7 @@ const FacultyDashboard = () => {
       
       const token = localStorage.getItem('token');
       
-      const response = await fetch(`${API_URL}faculty/faculty/unavailable-days`, {
+      const response = await fetch(`${normalizedApiUrl}faculty/faculty/unavailable-days`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1352,6 +1362,28 @@ const FacultyDashboard = () => {
               </Button>
             </div>
           </Modal>
+          
+          {/* Unavailability Request Form */}
+          <Card 
+            title="Request Unavailability" 
+            className="mb-6"
+            ref={unavailabilityFormRef}
+          >
+            <FacultyUnavailabilityForm 
+              facultyId={facultyId}
+              onRequestSubmitted={() => {
+                // Refresh unavailable days when a new request is submitted
+                const currentFacultyId = getCurrentFacultyId();
+                if (currentFacultyId) {
+                  getFacultyUnavailableDays(currentFacultyId).then(days => {
+                    if (days && Array.isArray(days)) {
+                      setUnavailableDays(days);
+                    }
+                  });
+                }
+              }}
+            />
+          </Card>
           
           {/* For more complex pages */}
           <Outlet />

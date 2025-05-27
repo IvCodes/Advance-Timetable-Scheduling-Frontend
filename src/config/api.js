@@ -29,6 +29,7 @@ const API_CONFIG = {
     BASE: "../exam-metrics",
     INFO: "../exam-metrics/",
     RUNS: "../exam-metrics/runs",
+    DELETE_RUN: "../exam-metrics/runs", // DELETE method with /{run_id}
     STATISTICS: "../exam-metrics/statistics",
     COMPARE: "../exam-metrics/compare",
     RUN_WITH_EVALUATION: "../exam-metrics/run-with-evaluation",

@@ -26,6 +26,7 @@ import {
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import makeApi from '../../../config/axiosConfig';
+import SubstituteSelector from './SubstituteSelector';
 
 const { Title } = Typography;
 const { Option } = Select;
@@ -34,7 +35,7 @@ const { Option } = Select;
 const getFacultyUnavailabilityRequests = async () => {
   try {
     const api = makeApi();
-    const response = await api.get('/faculty-availability/unavailability-requests');
+    const response = await api.get('faculty-availability/unavailability-requests');
     return response.data;
   } catch (error) {
     console.error("Error fetching faculty unavailability requests:", error);
@@ -46,7 +47,7 @@ const getFacultyUnavailabilityRequests = async () => {
 const assignSubstituteToRequest = async (requestId, substituteId) => {
   try {
     const api = makeApi();
-    const response = await api.put(`/faculty-availability/unavailability-requests/${requestId}/status`, {
+    const response = await api.put(`faculty-availability/unavailability-requests/${requestId}/status`, {
       status: 'approved',
       substitute_id: substituteId,
       admin_notes: 'Substitute assigned via Faculty Unavailability Management'
@@ -62,7 +63,7 @@ const assignSubstituteToRequest = async (requestId, substituteId) => {
 const updateRequestStatus = async (requestId, status, adminNotes = null) => {
   try {
     const api = makeApi();
-    const response = await api.put(`/faculty-availability/unavailability-requests/${requestId}/status`, {
+    const response = await api.put(`faculty-availability/unavailability-requests/${requestId}/status`, {
       status: status,
       admin_notes: adminNotes
     });
@@ -485,7 +486,16 @@ const FacultyUnavailability = () => {
         onCancel={() => setModalVisible(false)}
         onOk={submitAssignSubstitute}
         okText="Assign"
+        width={700}
       >
+        <div style={{ marginBottom: 16 }}>
+          <Typography.Text strong>Faculty:</Typography.Text> {selectedRequest?.facultyName}
+          <br />
+          <Typography.Text strong>Date:</Typography.Text> {selectedRequest?.startDate ? dayjs(selectedRequest.startDate).format('YYYY-MM-DD (dddd)') : 'N/A'}
+          <br />
+          <Typography.Text strong>Reason:</Typography.Text> {selectedRequest?.reason || 'No reason provided'}
+        </div>
+        
         <Form 
           form={form}
           layout="vertical"
@@ -495,19 +505,16 @@ const FacultyUnavailability = () => {
             label="Select Substitute Faculty"
             rules={[{ required: true, message: 'Please select a substitute faculty member' }]}
           >
-            <Select 
-              placeholder="Select a faculty member"
-              loading={teachersLoading}
-            >
-              {teachers && teachers
-                .filter(teacher => teacher.id !== selectedRequest?.facultyId)
-                .map(teacher => (
-                  <Option key={teacher.id} value={teacher.id}>
-                    {teacher.first_name} {teacher.last_name}
-                  </Option>
-                ))
-              }
-            </Select>
+            <SubstituteSelector
+              date={selectedRequest?.startDate}
+              originalFacultyId={selectedRequest?.facultyId}
+              onSubstituteSelect={(substituteId, substituteInfo) => {
+                form.setFieldsValue({ substituteId });
+              }}
+              value={form.getFieldValue('substituteId')}
+              placeholder="Select an available substitute faculty"
+              showRecommendations={true}
+            />
           </Form.Item>
         </Form>
       </Modal>
@@ -519,7 +526,16 @@ const FacultyUnavailability = () => {
         onCancel={() => setEditModalVisible(false)}
         onOk={submitEditSubstitute}
         okText="Update"
+        width={700}
       >
+        <div style={{ marginBottom: 16 }}>
+          <Typography.Text strong>Faculty:</Typography.Text> {selectedRequest?.facultyName}
+          <br />
+          <Typography.Text strong>Date:</Typography.Text> {selectedRequest?.startDate ? dayjs(selectedRequest.startDate).format('YYYY-MM-DD (dddd)') : 'N/A'}
+          <br />
+          <Typography.Text strong>Current Substitute:</Typography.Text> {selectedRequest?.substituteName || 'None assigned'}
+        </div>
+        
         <Form 
           form={editForm}
           layout="vertical"
@@ -529,19 +545,16 @@ const FacultyUnavailability = () => {
             label="Change Substitute Faculty"
             rules={[{ required: true, message: 'Please select a substitute faculty member' }]}
           >
-            <Select 
-              placeholder="Select a faculty member"
-              loading={teachersLoading}
-            >
-              {teachers && teachers
-                .filter(teacher => teacher.id !== selectedRequest?.facultyId)
-                .map(teacher => (
-                  <Option key={teacher.id} value={teacher.id}>
-                    {teacher.first_name} {teacher.last_name}
-                  </Option>
-                ))
-              }
-            </Select>
+            <SubstituteSelector
+              date={selectedRequest?.startDate}
+              originalFacultyId={selectedRequest?.facultyId}
+              onSubstituteSelect={(substituteId, substituteInfo) => {
+                editForm.setFieldsValue({ substituteId });
+              }}
+              value={editForm.getFieldValue('substituteId')}
+              placeholder="Select a different substitute faculty"
+              showRecommendations={true}
+            />
           </Form.Item>
         </Form>
       </Modal>

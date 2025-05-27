@@ -34,6 +34,7 @@ import {
   SwapOutlined,
   PlayCircleOutlined,
   DownloadOutlined,
+  DeleteOutlined,
 } from "@ant-design/icons";
 import makeApi from "../../../config/axiosConfig";
 import API_CONFIG from "../../../config/api";
@@ -182,6 +183,37 @@ const ExamMetrics = () => {
     }
   };
 
+  const deleteAlgorithmRun = async (runId) => {
+    try {
+      const response = await api.delete(`${API_CONFIG.EXAM_METRICS.DELETE_RUN}/${runId}`);
+      if (response.data.success) {
+        message.success(`Algorithm run deleted successfully`);
+        fetchAlgorithmRuns();
+        fetchStatistics();
+        // Remove from selected runs if it was selected
+        setSelectedRuns(selectedRuns.filter(id => id !== runId));
+      }
+    } catch (error) {
+      console.error("Error deleting algorithm run:", error);
+      if (error.response?.status === 404) {
+        message.error("Algorithm run not found");
+      } else {
+        message.error("Failed to delete algorithm run");
+      }
+    }
+  };
+
+  const confirmDelete = (runId, algorithmName) => {
+    Modal.confirm({
+      title: 'Delete Algorithm Run',
+      content: `Are you sure you want to delete this ${algorithmName} run? This action cannot be undone.`,
+      okText: 'Delete',
+      okType: 'danger',
+      cancelText: 'Cancel',
+      onOk: () => deleteAlgorithmRun(runId),
+    });
+  };
+
   const getAlgorithmColor = (algorithm) => {
     const colors = {
       nsga2: "blue",
@@ -259,16 +291,38 @@ const ExamMetrics = () => {
       ),
     },
     {
-      title: "Proximity Penalty",
+      title: (
+        <Tooltip title="Student satisfaction metric - penalizes exams scheduled too close together. Excellent: <50k, Good: 50k-100k, Average: 100k-150k, Poor: >150k">
+          Proximity Penalty
+        </Tooltip>
+      ),
       dataIndex: ["metrics", "proximity_penalty"],
       key: "proximity_penalty",
-      render: (score) => (
-        <Statistic
-          value={score || 0}
-          precision={0}
-          valueStyle={{ fontSize: "12px", color: score > 100000 ? "#ff4d4f" : "#52c41a" }}
-        />
-      ),
+      render: (score) => {
+        let color = "#52c41a"; // Green (excellent)
+        let performance = "Excellent";
+        
+        if (score > 150000) {
+          color = "#ff4d4f"; // Red (poor)
+          performance = "Poor";
+        } else if (score > 100000) {
+          color = "#fa8c16"; // Orange (average)
+          performance = "Average";
+        } else if (score > 50000) {
+          color = "#1890ff"; // Blue (good)
+          performance = "Good";
+        }
+        
+        return (
+          <Tooltip title={`${performance} performance (${score?.toLocaleString() || 0})`}>
+            <Statistic
+              value={score || 0}
+              precision={0}
+              valueStyle={{ fontSize: "12px", color }}
+            />
+          </Tooltip>
+        );
+      },
       sorter: (a, b) => {
         const scoreA = a?.metrics?.proximity_penalty || 0;
         const scoreB = b?.metrics?.proximity_penalty || 0;
@@ -276,15 +330,25 @@ const ExamMetrics = () => {
       },
     },
     {
-      title: "Conflicts",
+      title: (
+        <Tooltip title="Hard constraint violations - students with conflicting exams. Must be 0 for valid solutions.">
+          Conflicts
+        </Tooltip>
+      ),
       dataIndex: ["metrics", "conflict_violations"],
       key: "conflict_violations",
-      render: (conflicts) => (
-        <Badge
-          count={conflicts || 0}
-          style={{ backgroundColor: (conflicts || 0) > 0 ? "#f5222d" : "#52c41a" }}
-        />
-      ),
+      render: (conflicts) => {
+        const isValid = (conflicts || 0) === 0;
+        return (
+          <Tooltip title={isValid ? "Valid solution - no conflicts" : `${conflicts} students have conflicting exams`}>
+            <Badge
+              count={conflicts || 0}
+              style={{ backgroundColor: isValid ? "#52c41a" : "#f5222d" }}
+            />
+            {isValid && <CheckCircleOutlined style={{ color: "#52c41a", marginLeft: 8 }} />}
+          </Tooltip>
+        );
+      },
     },
     {
       title: "Efficiency",
@@ -305,6 +369,24 @@ const ExamMetrics = () => {
       key: "total_students_affected",
       render: (count) => (
         <Text>{count || 0}</Text>
+      ),
+    },
+    {
+      title: "Actions",
+      key: "actions",
+      width: 100,
+      render: (_, record) => (
+        <Space size="small">
+          <Tooltip title="Delete this algorithm run">
+            <Button
+              type="text"
+              danger
+              size="small"
+              icon={<DeleteOutlined />}
+              onClick={() => confirmDelete(record._id, record.algorithm_name)}
+            />
+          </Tooltip>
+        </Space>
       ),
     },
   ];
@@ -364,10 +446,64 @@ const ExamMetrics = () => {
           </Card>
         </Col>
 
+        {/* Dataset Information */}
+        <Col span={24}>
+          <Card title="Dataset Information: STA-F-83 (Carter Benchmark)" size="small">
+            <Row gutter={[16, 16]}>
+              <Col span={12}>
+                <Descriptions bordered size="small" column={1}>
+                  <Descriptions.Item label="Dataset">STA-F-83 (University of Toronto)</Descriptions.Item>
+                  <Descriptions.Item label="Exams">139</Descriptions.Item>
+                  <Descriptions.Item label="Students">611</Descriptions.Item>
+                  <Descriptions.Item label="Timeslots">13</Descriptions.Item>
+                  <Descriptions.Item label="Conflict Density">~0.14 (14% of exam pairs conflict)</Descriptions.Item>
+                </Descriptions>
+              </Col>
+              <Col span={12}>
+                <Title level={5}>Performance Guidelines</Title>
+                <div style={{ fontSize: "12px", lineHeight: "1.6" }}>
+                  <div><strong>Proximity Penalty:</strong></div>
+                  <div>• Excellent: &lt; 50,000</div>
+                  <div>• Good: 50,000 - 100,000</div>
+                  <div>• Average: 100,000 - 150,000</div>
+                  <div>• Poor: &gt; 150,000</div>
+                  <br />
+                  <div><strong>Hard Constraints:</strong></div>
+                  <div>• Must be 0 (no student conflicts)</div>
+                  <br />
+                  <div><strong>Efficiency Score:</strong></div>
+                  <div>• Higher is better (optimal timeslot usage)</div>
+                </div>
+              </Col>
+            </Row>
+            <Divider />
+            <Alert
+              message="About Carter Benchmark Datasets"
+              description={
+                <div>
+                  <div style={{ marginBottom: 8 }}>
+                    The STA-F-83 dataset is part of the standard Carter benchmark suite for exam timetabling research. 
+                    It represents real-world constraints from the University of Toronto. The proximity penalty measures 
+                    student satisfaction by penalizing exams scheduled too close together.
+                  </div>
+                  <div style={{ fontSize: "11px", fontStyle: "italic" }}>
+                    <strong>Reference:</strong> R. Qu, E. K. Burke, B. McCollum, L.T.G. Merlot, and S.Y. Lee. 
+                    "A Survey of Search Methodologies and Automated System Development for Examination Timetabling." 
+                    Journal of Scheduling, 12(1): 55-89, 2009.
+                  </div>
+                </div>
+              }
+              type="info"
+              showIcon
+              style={{ marginTop: 8 }}
+            />
+          </Card>
+        </Col>
+
         {/* Statistics Overview */}
         {statistics && (
           <Col span={24}>
-            <Card title="Performance Overview" size="small">
+            <Card title="Algorithm Performance Overview" size="small">
               <Row gutter={16}>
                 <Col span={6}>
                   <Statistic
@@ -445,6 +581,22 @@ const ExamMetrics = () => {
             <Tabs defaultActiveKey="runs">
               <TabPane tab="Algorithm Runs" key="runs">
                 <Space direction="vertical" style={{ width: "100%" }}>
+                  {/* Metrics Explanation */}
+                  <Alert
+                    message="Metric Explanations"
+                    description={
+                      <div style={{ fontSize: "12px" }}>
+                        <strong>Proximity Penalty:</strong> Measures student satisfaction - lower is better. Penalizes exams scheduled too close together. 
+                        <strong> Conflicts:</strong> Hard constraint violations - must be 0 for valid solutions. 
+                        <strong> Efficiency:</strong> Percentage of optimal timeslot utilization - higher is better.
+                      </div>
+                    }
+                    type="info"
+                    showIcon
+                    closable
+                    style={{ marginBottom: 16 }}
+                  />
+                  
                   <Row justify="space-between">
                     <Col>
                       <Space>
