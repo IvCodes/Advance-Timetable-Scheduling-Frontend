@@ -16,9 +16,9 @@ const API_CONFIG = {
     RUN_ALGORITHM: "../enhanced-timetable/run-algorithm",
     RUN_ALL_ALGORITHMS: "../enhanced-timetable/run-all-algorithms",
     LIST_FILES: "../enhanced-timetable/list-generated-files",
-    VIEW_HTML: "/api/enhanced-timetable/view-html", // View HTML in browser
-    DOWNLOAD_HTML: "/api/enhanced-timetable/download-html", // Download HTML file
-    DELETE_HTML: "/api/enhanced-timetable/delete-html", // Delete HTML file
+    VIEW_HTML: "/api/enhanced-timetable/view-html", // View HTML in browser (absolute path for direct browser access)
+    DOWNLOAD_HTML: "/api/enhanced-timetable/download-html", // Download HTML file (absolute path for direct browser access)
+    DELETE_HTML: "../enhanced-timetable/delete-html", // Delete HTML file
     GENERATE_TEST_HTML: "../enhanced-timetable/generate-test-html",
     HEALTH: "../enhanced-timetable/health",
     CLEANUP: "../enhanced-timetable/cleanup-files",

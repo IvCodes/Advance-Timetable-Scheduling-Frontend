@@ -50,6 +50,7 @@ const ExamMetrics = () => {
   const [comparison, setComparison] = useState(null);
   const [isRunModalVisible, setIsRunModalVisible] = useState(false);
   const [runLoading, setRunLoading] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [form] = Form.useForm();
 
   const api = makeApi();
@@ -60,14 +61,21 @@ const ExamMetrics = () => {
   }, []);
 
   const fetchAlgorithmRuns = async () => {
+    if (isPaused) {
+      console.log("⏸️ Skipping algorithm runs fetch - paused");
+      return;
+    }
+    
+    console.log("🔄 Fetching algorithm runs...", new Date().toLocaleTimeString());
     setLoading(true);
     try {
       const response = await api.get(API_CONFIG.EXAM_METRICS.RUNS);
       if (response.data.success) {
         setAlgorithmRuns(response.data.runs);
+        console.log("✅ Algorithm runs fetched:", response.data.runs.length, "runs");
       }
     } catch (error) {
-      console.error("Error fetching algorithm runs:", error);
+      console.error("❌ Error fetching algorithm runs:", error);
       message.error("Failed to fetch algorithm runs");
     } finally {
       setLoading(false);
@@ -75,13 +83,20 @@ const ExamMetrics = () => {
   };
 
   const fetchStatistics = async () => {
+    if (isPaused) {
+      console.log("⏸️ Skipping statistics fetch - paused");
+      return;
+    }
+    
+    console.log("📊 Fetching statistics...", new Date().toLocaleTimeString());
     try {
       const response = await api.get(API_CONFIG.EXAM_METRICS.STATISTICS);
       if (response.data.success) {
         setStatistics(response.data.statistics);
+        console.log("✅ Statistics fetched");
       }
     } catch (error) {
-      console.error("Error fetching statistics:", error);
+      console.error("❌ Error fetching statistics:", error);
       message.error("Failed to fetch statistics");
     }
   };
@@ -119,10 +134,20 @@ const ExamMetrics = () => {
       });
 
       if (response.data.success) {
-        const { summary } = response.data;
+        const { summary, results } = response.data;
         message.success(
-          `Batch evaluation completed! ${summary.successful}/${summary.total_algorithms} algorithms succeeded`
+          `Batch evaluation completed! ${summary.successful}/${summary.total_algorithms} algorithms succeeded. Results are being stored for comparison.`
         );
+        
+        // Show detailed results if available
+        if (results && results.comparison) {
+          setTimeout(() => {
+            message.info(
+              `Best performing algorithm: ${results.comparison.best_algorithm}. Check the Comparison Results tab for detailed analysis.`
+            );
+          }, 2000);
+        }
+        
         fetchAlgorithmRuns();
         fetchStatistics();
       } else {
@@ -191,64 +216,95 @@ const ExamMetrics = () => {
   const runsTableColumns = [
     {
       title: "Run ID",
-      dataIndex: "run_id",
-      key: "run_id",
-      render: (text) => <Text code>{text.slice(0, 8)}...</Text>,
+      dataIndex: "_id",
+      key: "_id",
+      render: (text) => (
+        <Text code>{text ? text.slice(-8) : 'N/A'}</Text>
+      ),
     },
     {
       title: "Algorithm",
       dataIndex: "algorithm_name",
       key: "algorithm_name",
-      render: (text) => <Tag color={getAlgorithmColor(text)}>{text.toUpperCase()}</Tag>,
+      render: (text) => (
+        <Tag color={getAlgorithmColor(text || 'unknown')}>
+          {text ? text.toUpperCase() : 'UNKNOWN'}
+        </Tag>
+      ),
     },
     {
-      title: "Mode",
-      dataIndex: "mode",
-      key: "mode",
-      render: (text) => <Tag color={getModeColor(text)}>{text}</Tag>,
+      title: "Parameters",
+      dataIndex: "algorithm_parameters",
+      key: "algorithm_parameters",
+      render: (params) => {
+        if (!params) return <Text type="secondary">N/A</Text>;
+        const paramText = Object.entries(params)
+          .map(([key, value]) => `${key}=${value}`)
+          .join(", ");
+        return (
+          <Tooltip title={paramText}>
+            <Text style={{ fontSize: "11px" }}>{paramText}</Text>
+          </Tooltip>
+        );
+      },
     },
     {
       title: "Execution Time",
-      dataIndex: "execution_time",
-      key: "execution_time",
+      dataIndex: "execution_time_seconds",
+      key: "execution_time_seconds",
       render: (time) => (
-        <Tooltip title={`${time} seconds`}>
-          <Text>{formatDuration(time)}</Text>
+        <Tooltip title={`${time || 0} seconds`}>
+          <Text>{time ? formatDuration(time) : 'N/A'}</Text>
         </Tooltip>
       ),
     },
     {
-      title: "Total Score",
-      dataIndex: ["evaluation", "total_score"],
-      key: "total_score",
+      title: "Proximity Penalty",
+      dataIndex: ["metrics", "proximity_penalty"],
+      key: "proximity_penalty",
       render: (score) => (
         <Statistic
-          value={score}
-          precision={2}
-          valueStyle={{ fontSize: "14px" }}
+          value={score || 0}
+          precision={0}
+          valueStyle={{ fontSize: "12px", color: score > 100000 ? "#ff4d4f" : "#52c41a" }}
         />
       ),
-      sorter: (a, b) => a.evaluation.total_score - b.evaluation.total_score,
+      sorter: (a, b) => {
+        const scoreA = a?.metrics?.proximity_penalty || 0;
+        const scoreB = b?.metrics?.proximity_penalty || 0;
+        return scoreA - scoreB;
+      },
     },
     {
       title: "Conflicts",
-      dataIndex: ["evaluation", "conflicts"],
-      key: "conflicts",
+      dataIndex: ["metrics", "conflict_violations"],
+      key: "conflict_violations",
       render: (conflicts) => (
         <Badge
-          count={conflicts}
-          style={{ backgroundColor: conflicts > 0 ? "#f5222d" : "#52c41a" }}
+          count={conflicts || 0}
+          style={{ backgroundColor: (conflicts || 0) > 0 ? "#f5222d" : "#52c41a" }}
         />
       ),
     },
     {
-      title: "Timestamp",
-      dataIndex: "run_timestamp",
-      key: "run_timestamp",
-      render: (timestamp) => (
-        <Tooltip title={formatTimestamp(timestamp)}>
-          <Text>{new Date(timestamp).toLocaleDateString()}</Text>
-        </Tooltip>
+      title: "Efficiency",
+      dataIndex: ["metrics", "efficiency_score"],
+      key: "efficiency_score",
+      render: (score) => (
+        <Statistic
+          value={(score || 0) * 100}
+          precision={1}
+          suffix="%"
+          valueStyle={{ fontSize: "12px" }}
+        />
+      ),
+    },
+    {
+      title: "Students Affected",
+      dataIndex: ["metrics", "total_students_affected"],
+      key: "total_students_affected",
+      render: (count) => (
+        <Text>{count || 0}</Text>
       ),
     },
   ];
@@ -292,6 +348,16 @@ const ExamMetrics = () => {
                   >
                     Refresh
                   </Button>
+                  <Button
+                    icon={isPaused ? <PlayCircleOutlined /> : <ExclamationCircleOutlined />}
+                    type={isPaused ? "primary" : "default"}
+                    onClick={() => {
+                      setIsPaused(!isPaused);
+                      message.info(isPaused ? "Resumed API calls" : "Paused API calls");
+                    }}
+                  >
+                    {isPaused ? "Resume" : "Pause"}
+                  </Button>
                 </Space>
               </Col>
             </Row>
@@ -306,22 +372,30 @@ const ExamMetrics = () => {
                 <Col span={6}>
                   <Statistic
                     title="Total Runs"
-                    value={statistics.total_runs}
+                    value={statistics.total_runs || 0}
                     prefix={<ClockCircleOutlined />}
                   />
                 </Col>
                 <Col span={6}>
                   <Statistic
-                    title="Best Score"
-                    value={statistics.best_score}
-                    precision={2}
+                    title="Best Proximity Penalty"
+                    value={
+                      statistics.algorithm_stats && statistics.algorithm_stats.length > 0
+                        ? Math.min(...statistics.algorithm_stats.map(s => s.best_proximity_penalty || Infinity))
+                        : 0
+                    }
+                    precision={0}
                     prefix={<TrophyOutlined />}
                   />
                 </Col>
                 <Col span={6}>
                   <Statistic
                     title="Avg Execution Time"
-                    value={statistics.avg_execution_time}
+                    value={
+                      statistics.algorithm_stats && statistics.algorithm_stats.length > 0
+                        ? statistics.algorithm_stats.reduce((sum, s) => sum + (s.avg_execution_time || 0), 0) / statistics.algorithm_stats.length
+                        : 0
+                    }
                     precision={1}
                     suffix="s"
                     prefix={<ClockCircleOutlined />}
@@ -329,14 +403,38 @@ const ExamMetrics = () => {
                 </Col>
                 <Col span={6}>
                   <Statistic
-                    title="Success Rate"
-                    value={statistics.success_rate}
-                    precision={1}
-                    suffix="%"
+                    title="Algorithms Tested"
+                    value={statistics.algorithm_stats ? statistics.algorithm_stats.length : 0}
                     prefix={<CheckCircleOutlined />}
                   />
                 </Col>
               </Row>
+              
+              {/* Algorithm-specific stats */}
+              {statistics.algorithm_stats && statistics.algorithm_stats.length > 0 && (
+                <Divider />
+              )}
+              {statistics.algorithm_stats && statistics.algorithm_stats.map((algoStat) => (
+                <Row key={algoStat._id} gutter={16} style={{ marginBottom: 8 }}>
+                  <Col span={4}>
+                    <Tag color={getAlgorithmColor(algoStat._id)}>
+                      {algoStat._id.toUpperCase()}
+                    </Tag>
+                  </Col>
+                  <Col span={5}>
+                    <Text type="secondary">Runs: {algoStat.total_runs}</Text>
+                  </Col>
+                  <Col span={5}>
+                    <Text type="secondary">Avg Penalty: {algoStat.avg_proximity_penalty?.toFixed(0) || 'N/A'}</Text>
+                  </Col>
+                  <Col span={5}>
+                    <Text type="secondary">Best Penalty: {algoStat.best_proximity_penalty?.toFixed(0) || 'N/A'}</Text>
+                  </Col>
+                  <Col span={5}>
+                    <Text type="secondary">Avg Time: {algoStat.avg_execution_time?.toFixed(1) || 'N/A'}s</Text>
+                  </Col>
+                </Row>
+              ))}
             </Card>
           </Col>
         )}
@@ -371,7 +469,7 @@ const ExamMetrics = () => {
                   <Table
                     columns={runsTableColumns}
                     dataSource={algorithmRuns}
-                    rowKey="run_id"
+                    rowKey={(record) => record._id || Math.random()}
                     rowSelection={rowSelection}
                     loading={loading}
                     pagination={{
@@ -380,6 +478,14 @@ const ExamMetrics = () => {
                       showQuickJumper: true,
                     }}
                     scroll={{ x: 1200 }}
+                    locale={{
+                      emptyText: (
+                        <Empty
+                          description="No algorithm runs found. Run some algorithms to see evaluation results here."
+                          image={Empty.PRESENTED_IMAGE_SIMPLE}
+                        />
+                      ),
+                    }}
                   />
                 </Space>
               </TabPane>
@@ -389,9 +495,9 @@ const ExamMetrics = () => {
                   <div>
                     <Title level={4}>Algorithm Comparison Results</Title>
                     <Row gutter={[16, 16]}>
-                      <Col span={24}>
-                        <Card title="Ranking" size="small">
-                          {comparison.ranking.map((item, index) => (
+                      <Col span={12}>
+                        <Card title="Overall Ranking" size="small">
+                          {comparison.overall_ranking && comparison.overall_ranking.map((item, index) => (
                             <div key={item.run_id} style={{ marginBottom: 8 }}>
                               <Badge
                                 count={index + 1}
@@ -401,32 +507,47 @@ const ExamMetrics = () => {
                                 <Tag color={getAlgorithmColor(item.algorithm_name)}>
                                   {item.algorithm_name.toUpperCase()}
                                 </Tag>
-                                Score: {item.total_score.toFixed(2)}
+                                Overall Score: {item.overall_score ? item.overall_score.toFixed(2) : 'N/A'}
+                              </span>
+                            </div>
+                          ))}
+                        </Card>
+                      </Col>
+                      <Col span={12}>
+                        <Card title="Proximity Penalty Ranking" size="small">
+                          {comparison.proximity_ranking && comparison.proximity_ranking.map((item, index) => (
+                            <div key={item.run_id} style={{ marginBottom: 8 }}>
+                              <Badge
+                                count={index + 1}
+                                style={{ backgroundColor: index === 0 ? "#52c41a" : "#1890ff" }}
+                              />
+                              <span style={{ marginLeft: 8 }}>
+                                <Tag color={getAlgorithmColor(item.algorithm_name)}>
+                                  {item.algorithm_name.toUpperCase()}
+                                </Tag>
+                                Penalty: {item.score ? item.score.toFixed(0) : 'N/A'}
                               </span>
                             </div>
                           ))}
                         </Card>
                       </Col>
                       <Col span={24}>
-                        <Card title="Detailed Metrics" size="small">
-                          <Table
-                            dataSource={comparison.detailed_comparison}
-                            columns={[
-                              { title: "Metric", dataIndex: "metric", key: "metric" },
-                              ...comparison.runs.map((run) => ({
-                                title: (
-                                  <Tag color={getAlgorithmColor(run.algorithm_name)}>
-                                    {run.algorithm_name.toUpperCase()}
-                                  </Tag>
-                                ),
-                                dataIndex: run.run_id,
-                                key: run.run_id,
-                                render: (value) => typeof value === "number" ? value.toFixed(2) : value,
-                              })),
-                            ]}
-                            pagination={false}
-                            size="small"
-                          />
+                        <Card title="Performance Summary" size="small">
+                          <Descriptions bordered size="small">
+                            <Descriptions.Item label="Best Algorithm">
+                              <Tag color={getAlgorithmColor(comparison.best_algorithm)}>
+                                {comparison.best_algorithm ? comparison.best_algorithm.toUpperCase() : 'N/A'}
+                              </Tag>
+                            </Descriptions.Item>
+                            <Descriptions.Item label="Worst Algorithm">
+                              <Tag color={getAlgorithmColor(comparison.worst_algorithm)}>
+                                {comparison.worst_algorithm ? comparison.worst_algorithm.toUpperCase() : 'N/A'}
+                              </Tag>
+                            </Descriptions.Item>
+                            <Descriptions.Item label="Performance Gap">
+                              {comparison.performance_gap ? comparison.performance_gap.toFixed(2) : 'N/A'}
+                            </Descriptions.Item>
+                          </Descriptions>
                         </Card>
                       </Col>
                     </Row>

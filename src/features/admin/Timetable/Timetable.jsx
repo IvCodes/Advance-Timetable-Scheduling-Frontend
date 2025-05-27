@@ -6,7 +6,7 @@ const sidebarLinks = [
   { id: 1, href: "/admin/timetable/generate", text: "Generate" },
   { id: 2, href: "/admin/timetable/view", text: "View" },
   { id: 3, href: "/admin/timetable/view-sliit", text: "SLIIT Timetables" },
-  { id: 4, href: "/admin/timetable/exams", text: "Enhanced Exams" },
+  { id: 4, href: "/admin/timetable/exams", text: "Exams" },
   { id: 5, href: "/admin/timetable/faculty-unavailability", text: "Faculty Unavailability" },
 ];
 

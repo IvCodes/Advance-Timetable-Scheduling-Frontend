@@ -120,15 +120,30 @@ const EnhancedExams = () => {
   const runSingleAlgorithm = async (values) => {
     setRunLoading(true);
     try {
-      const response = await api.post(API_CONFIG.ENHANCED_TIMETABLE.RUN_ALGORITHM, {
+      // Use evaluation API for comprehensive metrics and database storage
+      const response = await api.post(API_CONFIG.EXAM_METRICS.RUN_WITH_EVALUATION, {
         algorithm: values.algorithm,
         mode: values.mode,
-        generate_html: true,
       });
 
       if (response.data.success) {
-        message.success(`Algorithm completed successfully! ${response.data.message}`);
-        fetchGeneratedFiles(); // Refresh file list
+        message.success(
+          `Algorithm completed with evaluation! Run ID: ${response.data.run_id || 'N/A'}`
+        );
+        
+        // Also generate HTML using the basic API for visualization
+        try {
+          await api.post(API_CONFIG.ENHANCED_TIMETABLE.RUN_ALGORITHM, {
+            algorithm: values.algorithm,
+            mode: values.mode,
+            generate_html: true,
+          });
+          fetchGeneratedFiles(); // Refresh file list
+        } catch (htmlError) {
+          console.warn("HTML generation failed:", htmlError);
+          message.warning("Algorithm completed but HTML generation failed");
+        }
+        
         setIsRunModalVisible(false);
         form.resetFields();
       } else {
@@ -136,7 +151,7 @@ const EnhancedExams = () => {
       }
     } catch (error) {
       console.error("Error running algorithm:", error);
-      message.error("Error running algorithm");
+      message.error("Error running algorithm with evaluation");
     } finally {
       setRunLoading(false);
     }
@@ -145,23 +160,34 @@ const EnhancedExams = () => {
   const runAllAlgorithms = async (mode) => {
     setBatchRunLoading(true);
     try {
-      const response = await api.post(API_CONFIG.ENHANCED_TIMETABLE.RUN_ALL_ALGORITHMS, {
+      // Use evaluation API for comprehensive metrics and comparison
+      const response = await api.post(API_CONFIG.EXAM_METRICS.RUN_ALL_WITH_EVALUATION, {
         mode: mode,
-        generate_html: true,
       });
 
       if (response.data.success) {
         const { summary } = response.data;
         message.success(
-          `Batch run completed! ${summary.successful}/${summary.total_algorithms} algorithms succeeded (${summary.success_rate.toFixed(1)}%)`
+          `Batch evaluation completed! ${summary.successful}/${summary.total_algorithms} algorithms succeeded. Check Evaluation Metrics tab for comparison.`
         );
-        fetchGeneratedFiles(); // Refresh file list
+        
+        // Also generate HTML files for visualization
+        try {
+          await api.post(API_CONFIG.ENHANCED_TIMETABLE.RUN_ALL_ALGORITHMS, {
+            mode: mode,
+            generate_html: true,
+          });
+          fetchGeneratedFiles(); // Refresh file list
+        } catch (htmlError) {
+          console.warn("HTML generation failed:", htmlError);
+          message.warning("Evaluation completed but HTML generation failed");
+        }
       } else {
-        message.error("Batch run failed");
+        message.error("Batch evaluation failed");
       }
     } catch (error) {
-      console.error("Error running batch algorithms:", error);
-      message.error("Error running batch algorithms");
+      console.error("Error running batch evaluation:", error);
+      message.error("Error running batch evaluation");
     } finally {
       setBatchRunLoading(false);
     }
@@ -354,7 +380,7 @@ const EnhancedExams = () => {
     <div className="bg-white p-6 rounded-xl shadow-md max-w-7xl mx-auto" style={{ color: '#1f2937' }}>
       <div className="flex justify-between items-center mb-4">
         <Title level={2} style={{ margin: 0, fontWeight: "bold", color: "white" }}>
-          Enhanced Exam Timetables with Student ID Mappings
+           Exam Timetables 
         </Title>
         <Space>
           <Button type="primary" icon={<PlayCircleOutlined />} onClick={showRunModal}>
@@ -368,7 +394,7 @@ const EnhancedExams = () => {
 
       <Alert
         message="Enhanced Timetable System"
-        description="This system generates beautiful HTML timetables with student ID mappings, showing detailed student information for each activity slot."
+        description=" system generates HTML timetables with student ID mappings, showing detailed student information for each activity slot."
         type="info"
         showIcon
         style={{ marginBottom: 24, color: '#1f2937' }}
@@ -509,6 +535,20 @@ const EnhancedExams = () => {
                     onClick={generateTestHTML}
                   >
                     Generate Test HTML
+                  </Button>
+                  <Button
+                    icon={<BarChartOutlined />}
+                    type="dashed"
+                    onClick={() => {
+                      // Switch to metrics tab
+                      const tabsElement = document.querySelector('.ant-tabs-tab[data-node-key="metrics"]');
+                      if (tabsElement) {
+                        tabsElement.click();
+                        message.info("Switched to Evaluation Metrics tab for algorithm comparison");
+                      }
+                    }}
+                  >
+                    View Comparisons
                   </Button>
                 </Space>
               </Card>
